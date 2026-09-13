@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0c1723">
+<meta name="description" content="COSTA — costeo y fijación de precios para cualquier producto.">
+<title>COSTA — Costos y precios</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-mark">▥</div>
+      <div><strong>COSTA</strong><small>Tus ideas, bien calculadas</small></div>
+    </div>
+    <nav id="mainNav">
+      <button data-view="dashboard" class="nav-item active"><span>⌂</span>Inicio</button>
+      <button data-view="products" class="nav-item"><span>▣</span>Productos</button>
+      <button data-view="ingredients" class="nav-item"><span>◫</span>Ingredientes / Insumos</button>
+      <button data-view="equipment" class="nav-item"><span>⚒</span>Equipos y herramientas</button>
+      <button data-view="services" class="nav-item"><span>☀</span>Servicios</button>
+      <button data-view="transport" class="nav-item"><span>▰</span>Transporte</button>
+      <button data-view="labor" class="nav-item"><span>♟</span>Mano de obra</button>
+      <button data-view="packaging" class="nav-item"><span>□</span>Empaques</button>
+      <button data-view="fixed" class="nav-item"><span>▤</span>Gastos fijos</button>
+      <button data-view="marketing" class="nav-item"><span>◆</span>Marketing y ventas</button>
+      <button data-view="simulator" class="nav-item"><span>⌁</span>Simulador</button>
+      <button data-view="reports" class="nav-item"><span>▥</span>Reportes</button>
+      <button data-view="settings" class="nav-item"><span>⚙</span>Configuración</button>
+    </nav>
+    <div class="sidebar-tip"><div class="bulb">●</div><b>Un mejor precio,<br>mejores decisiones.</b></div>
+    <small class="version">v1.0 · 100% local</small>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <button class="hamburger" id="hamburger">☰</button>
+      <div class="search"><span>⌕</span><input id="globalSearch" placeholder="Buscar productos, insumos, reportes..."></div>
+      <div class="top-actions">
+        <button class="icon-btn" title="Ayuda" id="helpBtn">?</button>
+        <button class="icon-btn" title="Notificaciones" id="bellBtn">♧</button>
+        <div class="profile"><div class="avatar">N</div><div><b id="businessNameTop">Tu Negocio</b><small id="businessTypeTop">Negocio en casa</small></div><span>⌄</span></div>
+      </div>
+    </header>
+    <div id="content" class="content"></div>
+  </main>
+</div>
+
+<div id="modalRoot"></div>
+<div id="toast"></div>
+<script src="app.js"></script><script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));}</script>
+</body>
+</html>
