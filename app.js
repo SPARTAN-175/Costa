@@ -117,7 +117,11 @@ function productCosts(p){
  const directBatch=materials+packaging+laborBatch+transportPerUnit*batch;
  const waste=directBatch*num(p.mermaPct)/100;
  const variableBatch=directBatch+waste;
- const monthlyFixed=monthlyEquipment()+monthlyServices()+fixedMonthlyCost()+monthlyMarketing();
+ const usedEquipment=new Set((p.tools||[]).map(t=>t.ref));
+ const usedServices=new Set((p.services||[]).map(s=>s.ref));
+ const unassignedEquipment=db.equipment.reduce((sum,e)=>usedEquipment.has(e.id)?sum:sum+Math.max(0,(num(e.purchase)-num(e.residual))/Math.max(1,num(e.lifeMonths))),0);
+ const unassignedServices=db.services.reduce((sum,s)=>usedServices.has(s.id)?sum:sum+num(s.monthly)*num(s.businessPct)/100,0);
+ const monthlyFixed=unassignedEquipment+unassignedServices+fixedMonthlyCost()+monthlyMarketing();
  const fixedAllocated=monthlyFixed/Math.max(1,num(p.monthlyUnits||300))*batch;
  const fullBatch=variableBatch+toolBatch+serviceBatch+fixedAllocated;
  return {
@@ -130,10 +134,14 @@ function productCosts(p){
 }
 function fixedMonthlyCost(){return db.fixed.reduce((s,x)=>s+num(x.monthly)*num(x.businessPct)/100,0)}
 function fixedMonthly(){return fixedMonthlyCost()}
+function monthlyEquipment(){return equipmentMonthly()}
+function monthlyServices(){return serviceMonthly()}
+function monthlyMarketing(){return marketingMonthly()}
+
 
 function priceFromMargin(cost,margin){return margin>=100?0:cost/(1-margin/100)}
-function suggestedPrice(p){return priceFromMargin(productCosts(p).total,num(p.targetMargin))}
-function breakEven(p,price){const c=productCosts(p);const contribution=num(price)-c.variable;return contribution>0?Math.ceil(c.fixedMonthly/contribution):Infinity}
+function suggestedPrice(p){const c=productCosts(p);return priceFromMargin(c.perUnit,num(p.targetMargin))}
+function breakEven(p,price){const c=productCosts(p);const productAllocated=c.variable+(c.tools+c.services)/c.yieldQty;const contribution=num(price)-productAllocated;return contribution>0?Math.ceil(c.fixedMonthly/contribution):Infinity}
 
 function render(){
  document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view===currentView));
@@ -149,7 +157,7 @@ function dashboard(){
  const p=db.products.find(x=>x.id===currentProductId)||db.products[0]; if(!p)return head("Inicio")+`<div class="card empty">Agrega tu primer producto.</div>`;
  const c=productCosts(p), sp=suggestedPrice(p), be=breakEven(p,sp);
  return head("Inicio","Vista general de tus costos, precios y rentabilidad.",`<button class="btn primary" data-action="new-product">＋ Nuevo producto</button>`)+
- `<div class="card section-card hero-product"><div class="pizza-art"></div><div style="flex:1"><h2>${esc(p.name)} <button class="btn small" data-action="edit-product" data-id="${p.id}">✎</button></h2><p>${esc(p.description||"")}</p><span class="tag">${esc(p.category||"Producto")}</span> <span class="tag gray">${esc(p.unit||"unidad")}</span><span class="tag gray">${p.timeMin||0} min</span></div></div>
+ `<div class="card section-card hero-product"><div class="pizza-art"></div><div style="flex:1"><h2>${esc(p.name)} <button class="btn small" data-action="edit-product" data-id="${p.id}">✎</button></h2><p>${esc(p.description||"")}</p><span class="tag">${esc(p.category||"Producto")}</span> <span class="tag gray">${esc(p.unit||"unidad")}</span><span class="tag gray">${num(p.timeValue??p.timeMin)} ${esc(p.timeUnit||"min")}</span></div></div>
  <div class="tabs"><button class="tab active">▣ Resumen</button><button class="tab" data-action="product-tab" data-id="${p.id}" data-tab="ingredients">◇ Ingredientes</button><button class="tab" data-action="product-tab" data-id="${p.id}" data-tab="indirect">⚙ Costos indirectos</button><button class="tab" data-action="product-tab" data-id="${p.id}" data-tab="price">▥ Precio y ganancia</button><button class="tab" data-action="go-sim" data-id="${p.id}">▦ Simulador</button></div>
  <div class="cards"><div class="card metric"><div class="label">Costo total por unidad</div><div class="value">${money(c.total)}</div><div class="progress"><i style="width:${Math.min(100,c.direct/c.total*100)}%"></i></div><div class="hint">Variables ${money(c.variable)} · Costos asignados ${money(c.overhead)}</div></div>
  <div class="card metric good"><div class="label">Precio sugerido</div><div class="value">${money(sp)}</div><div class="hint">Ganancia estimada <b>${money(sp-c.total)}</b> por unidad · margen ${num(p.targetMargin).toFixed(1)}%</div></div>
@@ -161,9 +169,18 @@ function dashboard(){
  <div class="card section-card"><div class="section-title"><h3>Proyección mensual</h3></div><div class="form-grid"><label class="field">Precio de venta<input id="dashSale" type="number" value="${Math.round(sp)}"></label><label class="field">Ventas diarias<input id="dashUnits" type="number" value="10"></label><label class="field">Días al mes<input id="dashDays" type="number" value="26"></label></div><div class="kpi-row" style="margin-top:10px"><div class="mini-kpi"><b id="dashRevenue">${money(sp*260)}</b><span>Ventas</span></div><div class="mini-kpi"><b id="dashProfit">${money((sp-c.total)*260)}</b><span>Utilidad estimada</span></div></div></div></div>`;
 }
 function recipeTable(p,c){
- let rows=(p.recipe||[]).map(r=>{const i=db.ingredients.find(x=>x.id===r.ref);const unit=ingCost(i||{});return `<tr><td>${esc(i?.name||"Insumo eliminado")}</td><td>${r.qty}</td><td>${money(unit)}/${i?.unit||"u"}</td><td class="money">${money(unit*r.qty)}</td></tr>`}).join("");
- rows+=(p.packaging||[]).map(r=>{const x=db.packaging.find(y=>y.id===r.ref);return `<tr><td>${esc(x?.name||"Empaque")}</td><td>${r.qty}</td><td>${money(x?.unitPrice||0)}/u</td><td class="money">${money((x?.unitPrice||0)*r.qty)}</td></tr>`}).join("");
- return `<div class="table-wrap"><table class="table"><thead><tr><th>Insumo</th><th>Cantidad</th><th>Costo unitario</th><th>Costo</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td colspan="3"><b>Total directos</b></td><td class="money"><b>${money(c.direct)}</b></td></tr></tfoot></table></div>`;
+ let rows=(p.recipe||[]).map(r=>{
+   const i=db.ingredients.find(x=>x.id===r.ref); if(!i)return `<tr><td>Insumo eliminado</td><td>${r.qty}</td><td>—</td><td class="money">—</td></tr>`;
+   const usedUnit=r.unit||i.unit, converted=convertQty(r.qty,usedUnit,i.unit);
+   const costPerUsedUnit=converted==null?0:ingCost(i)*(convertQty(1,usedUnit,i.unit)??1);
+   const line=converted==null?0:ingCost(i)*converted;
+   return `<tr><td>${esc(i.name)}</td><td>${r.qty}</td><td>${esc(usedUnit)} · ${money(costPerUsedUnit)}/${esc(usedUnit)}</td><td class="money">${money(line)}</td></tr>`;
+ }).join("");
+ rows+=(p.packaging||[]).map(r=>{
+   const x=db.packaging.find(y=>y.id===r.ref); if(!x)return "";
+   return `<tr><td>${esc(x.name)}</td><td>${r.qty}</td><td>${money(x.unitPrice)}/pieza</td><td class="money">${money((x.unitPrice||0)*r.qty)}</td></tr>`;
+ }).join("");
+ return `<div class="table-wrap"><table class="table"><thead><tr><th>Insumo</th><th>Cantidad</th><th>Costo unitario</th><th>Costo</th></tr></thead><tbody>${rows||`<tr><td colspan="4"><div class="empty">Sin materiales asociados.</div></td></tr>`}</tbody><tfoot><tr><td colspan="3"><b>Total directos</b></td><td class="money"><b>${money(c.materials+c.packaging)}</b></td></tr></tfoot></table></div>`;
 }
 function indirectTable(c){
  const monthlyUnits=c.monthlyUnits;
@@ -344,7 +361,22 @@ function action(a,b){
  if(a==="help")helpModal();
  if(a==="notifications")toast("No tienes notificaciones nuevas.");
 }
+
+function validateProductBeforeSave(){
+ const errors=[];
+ const margin=num(document.getElementById("pMargin")?.value);
+ if(margin<0||margin>=100)errors.push("El margen debe estar entre 0% y menos de 100%.");
+ if(num(document.getElementById("pYield")?.value)<=0)errors.push("El rendimiento del lote debe ser mayor que 0.");
+ if(num(document.getElementById("pMonthlyUnits")?.value)<=0)errors.push("La producción mensual debe ser mayor que 0.");
+ document.querySelectorAll(".recipe-row").forEach((r,i)=>{
+   const ref=r.querySelector(".r-ref")?.value, unit=r.querySelector(".r-unit")?.value, ing=db.ingredients.find(x=>x.id===ref);
+   if(ing && convertQty(1,unit,ing.unit)==null)errors.push(`Material ${i+1}: la unidad ${unit} no es compatible con ${ing.unit}.`);
+ });
+ return errors;
+}
+
 function saveProduct(id){
+ const errors=validateProductBeforeSave();if(errors.length){alert(errors.join("\n"));return;}
  const p=id?db.products.find(x=>x.id===id):{id:uid("p")};
  p.name=document.getElementById("pName").value.trim()||"Producto sin nombre";
  p.category=document.getElementById("pCategory").value.trim()||"General";
@@ -379,24 +411,24 @@ function setupSimulator(){
  const pSel=document.getElementById("simProduct");if(!pSel)return;
  const update=()=>{
   currentProductId=pSel.value;const p=db.products.find(x=>x.id===currentProductId),c=productCosts(p);
-  const margin=num(document.getElementById("simMargin").value),suggest=priceFromMargin(c.total,margin),price=num(document.getElementById("simPrice").value),daily=num(document.getElementById("simDaily").value),days=num(document.getElementById("simDays").value),units=daily*days;
+  const margin=num(document.getElementById("simMargin").value),suggest=priceFromMargin(c.perUnit,margin),price=num(document.getElementById("simPrice").value),daily=num(document.getElementById("simDaily").value),days=num(document.getElementById("simDays").value),units=daily*days;
   document.getElementById("simCost").value=c.total.toFixed(2);document.getElementById("simMarginVal").textContent=margin.toFixed(0)+"%";document.getElementById("simSuggested").innerHTML=`Precio sugerido con ${margin.toFixed(0)}% de margen: <b>${money(suggest)}</b>`;
-  const revenue=price*units, variable=c.variable*units, fixed=c.fixedMonthly, totalCosts=variable+fixed, profit=revenue-totalCosts, m= revenue?profit/revenue*100:0;
+  const revenue=price*units, variable=(c.variable+(c.tools+c.services)/c.yieldQty)*units, fixed=c.fixedMonthly, totalCosts=variable+fixed, profit=revenue-totalCosts, m= revenue?profit/revenue*100:0;
   document.getElementById("simRevenue").textContent=money(revenue);document.getElementById("simCosts").textContent=money(totalCosts);document.getElementById("simProfit").textContent=money(profit);document.getElementById("simMarginOut").textContent=m.toFixed(1)+"%";
   const be=breakEven(p,price);document.getElementById("simBreak").innerHTML=Number.isFinite(be)?`Punto de equilibrio: <b>${be} unidades/mes</b> a ${money(price)}.`:"Con este precio no se cubren los costos fijos.";
-  document.getElementById("scenarioTable").innerHTML=`<table class="table"><thead><tr><th>Escenario</th><th>Precio</th><th>Unidades</th><th>Utilidad</th></tr></thead><tbody>${[.9,1,1.1,1.2].map((mult,i)=>{const pr=suggest*mult,u=units,po=(pr-c.variable)*u-c.fixedMonthly;return `<tr><td>${["-10%","Sugerido","+10%","+20%"][i]}</td><td>${money(pr)}</td><td>${u}</td><td class="money">${money(po)}</td></tr>`}).join("")}</tbody></table>`;
+  document.getElementById("scenarioTable").innerHTML=`<table class="table"><thead><tr><th>Escenario</th><th>Precio</th><th>Unidades</th><th>Utilidad</th></tr></thead><tbody>${[.9,1,1.1,1.2].map((mult,i)=>{const pr=suggest*mult,u=units,po=(pr-(c.variable+(c.tools+c.services)/c.yieldQty))*u-c.fixedMonthly;return `<tr><td>${["-10%","Sugerido","+10%","+20%"][i]}</td><td>${money(pr)}</td><td>${u}</td><td class="money">${money(po)}</td></tr>`}).join("")}</tbody></table>`;
  };
  ["simProduct","simPrice","simDaily","simDays","simMargin"].forEach(x=>document.getElementById(x)?.addEventListener("input",update));update();
 }
 function setupDashboard(){
  const m=document.getElementById("dashMargin");if(!m)return;
  const p=db.products.find(x=>x.id===currentProductId),c=productCosts(p);
- const update=()=>{const margin=num(m.value),sp=priceFromMargin(c.total,margin);document.getElementById("dashMarginVal").textContent=margin.toFixed(0)+"%";document.getElementById("dashPrice").innerHTML=`Precio sugerido <b>${money(sp)}</b>`;const units=num(document.getElementById("dashUnits").value)*num(document.getElementById("dashDays").value),price=num(document.getElementById("dashSale").value);document.getElementById("dashRevenue").textContent=money(price*units);document.getElementById("dashProfit").textContent=money((price-c.variable)*units-c.fixedMonthly)};
+ const update=()=>{const margin=num(m.value),sp=priceFromMargin(c.perUnit,margin);document.getElementById("dashMarginVal").textContent=margin.toFixed(0)+"%";document.getElementById("dashPrice").innerHTML=`Precio sugerido <b>${money(sp)}</b>`;const units=num(document.getElementById("dashUnits").value)*num(document.getElementById("dashDays").value),price=num(document.getElementById("dashSale").value);document.getElementById("dashRevenue").textContent=money(price*units);document.getElementById("dashProfit").textContent=money((price-(c.variable+(c.tools+c.services)/c.yieldQty))*units-c.fixedMonthly)};
 ["dashMargin","dashSale","dashUnits","dashDays"].forEach(x=>document.getElementById(x)?.addEventListener("input",update));update();
 }
 function helpModal(){modal(`<div class="modal-backdrop"><div class="modal"><div class="modal-head"><h2>Cómo usar COSTA</h2><button class="close" data-action="close-modal">×</button></div><div class="modal-body"><div class="alert success"><b>1.</b> Registra tus insumos con precio y presentación.</div><div class="alert success"><b>2.</b> Registra equipos, servicios, espacio, transporte y mano de obra.</div><div class="alert success"><b>3.</b> Crea un producto y arma su receta.</div><div class="alert success"><b>4.</b> COSTA calcula el costo real, precio sugerido, margen y punto de equilibrio.</div><div class="alert"><b>Todo queda en este dispositivo.</b> Usa Exportar respaldo para guardar una copia.</div></div><div class="modal-foot"><button class="btn primary" data-action="close-modal">Entendido</button></div></div></div>`)}
 function exportData(){const blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="costa-respaldo.json";a.click();URL.revokeObjectURL(a.href);toast("Respaldo exportado")}
-function importData(){const input=document.createElement("input");input.type="file";input.accept=".json,application/json";input.onchange=()=>{const f=input.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{db=JSON.parse(r.result);save();render();toast("Respaldo importado")}catch(e){alert("El archivo no es válido.")}};r.readAsText(f)};input.click()}
+function importData(){const input=document.createElement("input");input.type="file";input.accept=".json,application/json";input.onchange=()=>{const f=input.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{db=JSON.parse(r.result);if(!db.products||!db.ingredients)throw Error();db.products.forEach(normalizeProduct);save();render();toast("Respaldo importado")}catch(e){alert("El archivo no es válido.")}};r.readAsText(f)};input.click()}
 document.addEventListener("click",e=>{
  const btn=e.target.closest("[data-action]");
  if(btn){e.preventDefault();action(btn.dataset.action,btn);return;}
