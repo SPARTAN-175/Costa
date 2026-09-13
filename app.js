@@ -32,6 +32,41 @@ let currentView="dashboard", currentProductId="p1";
 function load(){try{const x=JSON.parse(localStorage.getItem(KEY));return x||structuredClone(seed)}catch(e){return structuredClone(seed)}}
 function save(){localStorage.setItem(KEY,JSON.stringify(db))}
 function uid(p="x"){return p+Math.random().toString(36).slice(2,9)}
+const UNIT_GROUPS={
+ mass:{base:"g",options:[["mg","mg"],["g","g"],["kg","kg"]],factor:{mg:.001,g:1,kg:1000}},
+ volume:{base:"ml",options:[["ml","mL"],["L","L"]],factor:{ml:1,L:1000}},
+ length:{base:"cm",options:[["mm","mm"],["cm","cm"],["m","m"]],factor:{mm:.1,cm:1,m:100}},
+ area:{base:"m2",options:[["cm2","cm²"],["m2","m²"]],factor:{cm2:.0001,m2:1}},
+ count:{base:"pieza",options:[["pieza","pieza"],["unidad","unidad"],["par","par"],["docena","docena"],["paquete","paquete"],["caja","caja"]],factor:{pieza:1,unidad:1,par:2,docena:12,paquete:1,caja:1}},
+ time:{base:"min",options:[["min","minutos"],["h","horas"],["dia","días"],["semana","semanas"],["mes","meses"]],factor:{min:1,h:60,dia:1440,semana:10080,mes:43200}}
+};
+const UNIT_LIST=Object.entries(UNIT_GROUPS).flatMap(([group,g])=>g.options.map(([value,label])=>({value,label,group})));
+function unitOptions(selected="",group=""){return UNIT_LIST.filter(x=>!group||x.group===group).map(x=>`<option value="${x.value}" ${x.value===selected?"selected":""}>${x.label}</option>`).join("")}
+function unitGroup(unit){return UNIT_LIST.find(x=>x.value===unit)?.group||null}
+function convertQty(q,from,to){
+ if(from===to)return num(q);
+ const a=UNIT_LIST.find(x=>x.value===from),b=UNIT_LIST.find(x=>x.value===to);
+ if(!a||!b||a.group!==b.group)return null;
+ return num(q)*(UNIT_GROUPS[a.group].factor[from]/UNIT_GROUPS[b.group].factor[to]);
+}
+function normalizeProduct(p){
+ p.batchQty=num(p.batchQty??p.yield)||1;
+ p.unit=p.unit||"unidad";
+ p.timeValue=num(p.timeValue??p.timeMin);
+ p.timeUnit=p.timeUnit||"min";
+ p.monthlyUnits=num(p.monthlyUnits)||300;
+ p.mermaPct=num(p.mermaPct);
+ p.recipe=(p.recipe||[]).map(r=>({...r,unit:r.unit||db.ingredients.find(i=>i.id===r.ref)?.unit||"unidad"}));
+ p.packaging=p.packaging||[];
+ p.tools=p.tools||[];
+ p.services=p.services||[];
+ p.laborValue=num(p.laborValue??p.laborMin);
+ p.laborUnit=p.laborUnit||"min";
+ return p;
+}
+db.products.forEach(normalizeProduct);
+save();
+
 function money(n){return new Intl.NumberFormat("es-MX",{style:"currency",currency:db.business.currency||"MXN"}).format(Number(n)||0)}
 function num(v){return Number(v)||0}
 function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
@@ -39,26 +74,59 @@ function ingCost(i){return i.packQty?i.packPrice/i.packQty:0}
 function equipmentMonthly(){return db.equipment.reduce((s,x)=>s+Math.max(0,(num(x.purchase)-num(x.residual))/Math.max(1,num(x.lifeMonths))),0)}
 function serviceMonthly(){return db.services.reduce((s,x)=>s+num(x.monthly)*num(x.businessPct)/100,0)}
 function marketingMonthly(){return db.marketing.reduce((s,x)=>s+num(x.monthly),0)}
+function toolUnitCost(t,p){
+ const e=db.equipment.find(x=>x.id===t.ref); if(!e)return 0;
+ const depreciation=Math.max(0,(num(e.purchase)-num(e.residual))/Math.max(1,num(e.lifeMonths)));
+ const monthlyUnits=Math.max(1,num(p.monthlyUnits||300));
+ if(t.method==="perUnit") return depreciation*num(t.value||1)/monthlyUnits;
+ if(t.method==="percent") return depreciation*num(t.value)/100/monthlyUnits;
+ if(t.method==="time"){
+   const hoursMonth=Math.max(1,num(db.business?.availableHoursMonth||160));
+   const minutes=convertQty(t.value,t.unit||"min","min");
+   return depreciation*(num(minutes??t.value)/60)/hoursMonth;
+ }
+ if(t.method==="fixed") return num(t.value);
+ return depreciation/monthlyUnits;
+}
 function productCosts(p){
- let directBatch=0;
- (p.recipe||[]).forEach(r=>{const i=db.ingredients.find(x=>x.id===r.ref);if(i)directBatch+=ingCost(i)*num(r.qty)});
- (p.packaging||[]).forEach(r=>{const x=db.packaging.find(y=>y.id===r.ref);if(x)directBatch+=num(x.unitPrice)*num(r.qty)});
- const yieldQty=Math.max(1,num(p.yield)||1);
- const direct=directBatch/yieldQty;
- const labor=db.labor.find(x=>x.id===p.laborRef); const laborBatch=labor?(num(labor.hourRate)/60*num(p.laborMin)):0;
- const laborCost=laborBatch/yieldQty;
- const transport=num(p.transportKm)*num((db.transport[0]||{}).costPerKm);
- // Merma is applied to the productive/variable portion, not to fixed overhead.
- const variableBeforeWaste=direct+laborCost+transport;
- const waste=variableBeforeWaste*num(p.mermaPct)/100;
- const variable=variableBeforeWaste+waste;
- // Fixed/periodic costs are allocated to a chosen monthly production volume so the
- // product has a fully-loaded cost for pricing decisions.
- const monthlyUnits=Math.max(1,num(p.monthlyUnits)||300);
- const fixedMonthly=equipmentMonthly()+serviceMonthly()+fixedMonthlyCost()+marketingMonthly();
- const overhead=fixedMonthly/monthlyUnits;
- const total=variable+overhead;
- return {direct,labor:laborCost,indirect:overhead,transport,waste,total,variable,overhead,fixedMonthly,monthlyUnits,yieldQty};
+ p=normalizeProduct(p);
+ const batch=Math.max(1,num(p.batchQty));
+ let materials=0;
+ (p.recipe||[]).forEach(r=>{
+   const i=db.ingredients.find(x=>x.id===r.ref); if(!i)return;
+   const q=convertQty(r.qty,r.unit||i.unit,i.unit);
+   if(q!=null) materials+=num(ingCost(i))*q;
+ });
+ let packaging=0;
+ (p.packaging||[]).forEach(r=>{
+   const x=db.packaging.find(y=>y.id===r.ref); if(!x)return;
+   const q=convertQty(r.qty,r.unit||"pieza","pieza");
+   packaging+=num(x.unitPrice)*(q??num(r.qty));
+ });
+ const labor=db.labor.find(x=>x.id===p.laborRef);
+ const laborMinutes=convertQty(p.laborValue||0,p.laborUnit||"min","min")??num(p.laborValue);
+ const laborBatch=labor?num(labor.hourRate)/60*laborMinutes:0;
+ const transportPerUnit=num(p.transportKm)*num(db.transport?.[0]?.costPerKm||0);
+ const toolBatch=(p.tools||[]).reduce((sum,t)=>sum+toolUnitCost(t,p)*batch,0);
+ const serviceBatch=(p.services||[]).reduce((sum,s)=>{
+   const x=db.services.find(y=>y.id===s.ref); if(!x)return sum;
+   const units=Math.max(1,num(p.monthlyUnits||300));
+   if(s.method==="perUnit") return sum+num(s.value)*batch;
+   return sum+(num(x.monthly)*num(s.value??x.businessPct)/100/units)*batch;
+ },0);
+ const directBatch=materials+packaging+laborBatch+transportPerUnit*batch;
+ const waste=directBatch*num(p.mermaPct)/100;
+ const variableBatch=directBatch+waste;
+ const monthlyFixed=monthlyEquipment()+monthlyServices()+fixedMonthlyCost()+monthlyMarketing();
+ const fixedAllocated=monthlyFixed/Math.max(1,num(p.monthlyUnits||300))*batch;
+ const fullBatch=variableBatch+toolBatch+serviceBatch+fixedAllocated;
+ return {
+   materials,packaging,labor:laborBatch,transport:transportPerUnit*batch,
+   tools:toolBatch,services:serviceBatch,waste,fixedAllocated,
+   variableBatch,variable:variableBatch/batch,total:fullBatch,batchTotal:fullBatch,
+   perUnit:fullBatch/batch,yieldQty:batch,fixedMonthly:monthlyFixed,
+   variablePerUnit:variableBatch/batch,overhead:(toolBatch+serviceBatch+fixedAllocated)/batch
+ };
 }
 function fixedMonthlyCost(){return db.fixed.reduce((s,x)=>s+num(x.monthly)*num(x.businessPct)/100,0)}
 function fixedMonthly(){return fixedMonthlyCost()}
@@ -133,6 +201,21 @@ function resources(type,title){
  `<div class="card section-card"><div class="table-wrap"><table class="table"><thead><tr><th>Nombre</th><th>Costo calculado</th><th>Referencia</th><th></th></tr></thead><tbody>${rows||`<tr><td colspan="4"><div class="empty">Aún no hay registros.</div></td></tr>`}</tbody></table></div></div>`;
 }
 
+
+function liveProductCalc(){
+ const modalEl=document.querySelector("#modalRoot .modal");if(!modalEl)return;
+ const p={batchQty:num(document.getElementById("pYield")?.value)||1,monthlyUnits:num(document.getElementById("pMonthlyUnits")?.value)||300,mermaPct:num(document.getElementById("pWaste")?.value),transportKm:num(document.getElementById("pKm")?.value),laborRef:document.getElementById("pLabor")?.value,laborValue:num(document.getElementById("pLaborMin")?.value),laborUnit:document.getElementById("pLaborUnit")?.value,recipe:[],tools:[],services:[],packaging:[]};
+ document.querySelectorAll(".recipe-row").forEach(r=>p.recipe.push({ref:r.querySelector(".r-ref").value,qty:num(r.querySelector(".r-qty").value),unit:r.querySelector(".r-unit").value}));
+ document.querySelectorAll(".tool-row").forEach(r=>p.tools.push({ref:r.querySelector(".t-ref").value,method:r.querySelector(".t-method").value,value:num(r.querySelector(".t-value").value),unit:r.querySelector(".t-unit").value}));
+ document.querySelectorAll(".service-row").forEach(r=>p.services.push({ref:r.querySelector(".s-ref").value,method:r.querySelector(".s-method").value,value:num(r.querySelector(".s-value").value)}));
+ document.querySelectorAll(".pack-row").forEach(r=>p.packaging.push({ref:r.querySelector(".pk-ref").value,qty:num(r.querySelector(".pk-qty").value),unit:r.querySelector(".pk-unit").value}));
+ const c=productCosts(p),margin=num(document.getElementById("pMargin")?.value),sp=priceFromMargin(c.perUnit,margin),box=document.getElementById("liveProductCalc");
+ if(box)box.innerHTML=`<small>Costo completo estimado por ${esc(document.getElementById("pUnit")?.value||"unidad")}</small><div class="big">${money(c.perUnit)}</div><small>Materiales ${money(c.materials/c.yieldQty)} · Mano de obra ${money(c.labor/c.yieldQty)} · Herramientas ${money(c.tools/c.yieldQty)} · Servicios ${money(c.services/c.yieldQty)} · Fijos asignados ${money(c.fixedAllocated/c.yieldQty)}</small><div style="margin-top:8px"><b>Precio sugerido con ${margin.toFixed(1)}% de margen: ${money(sp)}</b></div>`;
+}
+function bindModal(){
+ document.querySelectorAll("#modalRoot [data-action]").forEach(x=>{if(!x._costaBound){x.onclick=()=>action(x.dataset.action,x);x._costaBound=true}});
+ document.querySelectorAll("#modalRoot input,#modalRoot select,#modalRoot textarea").forEach(x=>{if(!x._costaInputBound){x.addEventListener("input",liveProductCalc);x.addEventListener("change",liveProductCalc);x._costaInputBound=true}});
+}
 function simulator(){
  const p=db.products.find(x=>x.id===currentProductId)||db.products[0]; if(!p)return head("Simulador")+"<div class='card empty'>Primero crea un producto.</div>";
  const c=productCosts(p);
@@ -153,18 +236,80 @@ function settings(){
 }
 
 function productModal(id){
- const p=id?db.products.find(x=>x.id===id):{id:"",name:"",description:"",category:"Producto",unit:"unidad",yield:1,timeMin:20,price:0,targetMargin:40,recipe:[],packaging:[],laborRef:db.labor[0]?.id||"",laborMin:20,transportKm:1.25,mermaPct:5,monthlyUnits:300};
- return `<div class="modal-backdrop"><div class="modal"><div class="modal-head"><h2>${id?"Editar producto":"Nuevo producto"}</h2><button class="close" data-action="close-modal">×</button></div><div class="modal-body"><div class="form-grid"><label class="field">Nombre<input id="pName" value="${esc(p.name)}"></label><label class="field">Categoría<input id="pCategory" value="${esc(p.category)}"></label><label class="field">Unidad de venta<input id="pUnit" value="${esc(p.unit)}"></label><label class="field">Rendimiento<input id="pYield" type="number" value="${p.yield}"></label><label class="field">Tiempo de elaboración (min)<input id="pTime" type="number" value="${p.timeMin}"></label><label class="field">Margen objetivo (%)<input id="pMargin" type="number" value="${p.targetMargin}"></label><label class="field">Kilómetros promedio<input id="pKm" type="number" step=".01" value="${p.transportKm}"></label><label class="field">Merma (%)<input id="pWaste" type="number" step=".1" value="${p.mermaPct}"></label><label class="field">Producción estimada al mes<input id="pMonthlyUnits" type="number" value="${p.monthlyUnits||300}"></label><label class="field full">Descripción<textarea id="pDesc">${esc(p.description)}</textarea></label></div><hr><div class="section-title"><h3>Ingredientes / insumos</h3><button class="btn small" data-action="add-recipe-row">＋ Agregar</button></div><div id="recipeEditor">${recipeEditor(p)}</div><div class="section-title" style="margin-top:14px"><h3>Empaques</h3><button class="btn small" data-action="add-pack-row">＋ Agregar</button></div><div id="packEditor">${packEditor(p)}</div><div class="form-grid" style="margin-top:14px"><label class="field">Mano de obra<select id="pLabor">${db.labor.map(x=>`<option value="${x.id}" ${x.id===p.laborRef?"selected":""}>${esc(x.name)} — ${money(x.hourRate)}/h</option>`).join("")}</select></label><label class="field">Minutos de mano de obra<input id="pLaborMin" type="number" value="${p.laborMin}"></label></div></div><div class="modal-foot"><button class="btn" data-action="close-modal">Cancelar</button><button class="btn primary" data-action="save-product" data-id="${id||""}">Guardar producto</button></div></div></div>`;
+ const p=id?normalizeProduct(db.products.find(x=>x.id===id)):normalizeProduct({id:"",name:"",description:"",category:"Producto",unit:"unidad",batchQty:1,timeValue:20,timeUnit:"min",targetMargin:40,monthlyUnits:300,mermaPct:5,transportKm:0,recipe:[],tools:[],services:[],packaging:[],laborRef:db.labor[0]?.id||"",laborValue:20,laborUnit:"min"});
+ return `<div class="modal-backdrop" data-modal-bg><div class="modal"><div class="modal-head"><h2>${id?"Editar producto":"Nuevo producto"}</h2><button class="close" data-action="close-modal">×</button></div><div class="modal-body">
+ <div class="alert success">COSTA acepta piezas, kg, litros, metros, lotes, servicios y más. El tiempo puede expresarse en minutos, horas, días, semanas o meses.</div>
+ <div class="form-grid">
+ <label class="field">Nombre<input id="pName" value="${esc(p.name)}"></label>
+ <label class="field">Categoría<input id="pCategory" value="${esc(p.category)}"></label>
+ <label class="field">Unidad de venta<input id="pUnit" value="${esc(p.unit)}" placeholder="pieza, kg, litro, servicio..."></label>
+ <label class="field">Unidades obtenidas por lote<input id="pYield" type="number" step=".001" value="${p.batchQty}"></label>
+ <label class="field">Tiempo de elaboración<input id="pTimeValue" type="number" step=".01" value="${p.timeValue}"></label>
+ <label class="field">Unidad de tiempo<select id="pTimeUnit">${unitOptions(p.timeUnit,"time")}</select></label>
+ <label class="field">Margen objetivo (%)<input id="pMargin" type="number" step=".1" value="${p.targetMargin}"></label>
+ <label class="field">Producción estimada al mes<input id="pMonthlyUnits" type="number" value="${p.monthlyUnits}"></label>
+ <label class="field">Km de transporte por unidad<input id="pKm" type="number" step=".01" value="${p.transportKm}"></label>
+ <label class="field">Merma (%)<input id="pWaste" type="number" step=".1" value="${p.mermaPct}"></label>
+ <label class="field full">Descripción<textarea id="pDesc">${esc(p.description)}</textarea></label></div>
+ <hr class="hr">
+ <div class="section-title"><h3>📦 Ingredientes / materiales</h3><button class="btn small" data-action="add-recipe-row">＋ Agregar</button></div>
+ <div class="note">Puedes comprar en kg y usar gramos, comprar litros y usar mL, etc. COSTA convierte automáticamente unidades compatibles.</div>
+ <div id="recipeEditor">${recipeEditor(p)}</div>
+ <hr class="hr">
+ <div class="section-title"><h3>🔧 Equipos y herramientas utilizados</h3><button class="btn small" data-action="add-tool-row">＋ Agregar</button></div>
+ <div class="note">Selecciona las herramientas que realmente intervienen en este producto y decide cómo se asigna su costo.</div>
+ <div id="toolEditor">${toolEditor(p)}</div>
+ <hr class="hr">
+ <div class="section-title"><h3>⚡ Servicios utilizados</h3><button class="btn small" data-action="add-service-row">＋ Agregar</button></div>
+ <div id="serviceEditor">${serviceEditor(p)}</div>
+ <hr class="hr">
+ <div class="section-title"><h3>📦 Empaques</h3><button class="btn small" data-action="add-pack-row">＋ Agregar</button></div>
+ <div id="packEditor">${packEditor(p)}</div>
+ <hr class="hr">
+ <div class="form-grid">
+ <label class="field">Mano de obra<select id="pLabor">${db.labor.map(x=>`<option value="${x.id}" ${x.id===p.laborRef?"selected":""}>${esc(x.name)} — ${money(x.hourRate)}/h</option>`).join("")}</select></label>
+ <label class="field">Duración del trabajo<input id="pLaborMin" type="number" step=".01" value="${p.laborValue}"></label>
+ <label class="field">Unidad de tiempo<select id="pLaborUnit">${unitOptions(p.laborUnit,"time")}</select></label>
+ </div>
+ <hr class="hr"><div class="calc-box" id="liveProductCalc">Calculando...</div>
+ </div><div class="modal-foot"><button class="btn" data-action="close-modal">Cancelar</button><button class="btn primary" data-action="save-product" data-id="${id||""}">Guardar producto</button></div></div></div>`;
 }
-function recipeEditor(p){return (p.recipe||[]).map((r,i)=>`<div class="form-grid recipe-row" data-index="${i}" style="margin-bottom:7px"><label class="field">Insumo<select class="r-ref">${db.ingredients.map(x=>`<option value="${x.id}" ${x.id===r.ref?"selected":""}>${esc(x.name)}</option>`).join("")}</select></label><label class="field">Cantidad usada<input class="r-qty" type="number" step=".001" value="${r.qty}"></label></div>`).join("")||`<div class="empty">Agrega los insumos que utiliza el producto.</div>`}
-function packEditor(p){return (p.packaging||[]).map(r=>`<div class="form-grid pack-row" style="margin-bottom:7px"><label class="field">Empaque<select class="pk-ref">${db.packaging.map(x=>`<option value="${x.id}" ${x.id===r.ref?"selected":""}>${esc(x.name)}</option>`).join("")}</select></label><label class="field">Cantidad<input class="pk-qty" type="number" step=".01" value="${r.qty}"></label></div>`).join("")||`<div class="empty">Agrega empaques si aplica.</div>`}
+function recipeEditor(p){
+ return (p.recipe||[]).map(r=>`<div class="resource-row recipe-row">
+ <label class="field">Insumo<select class="r-ref">${db.ingredients.map(x=>`<option value="${x.id}" ${x.id===r.ref?"selected":""}>${esc(x.name)}</option>`).join("")}</select></label>
+ <label class="field">Cantidad<input class="r-qty" type="number" step=".0001" value="${r.qty}"></label>
+ <label class="field">Unidad<select class="r-unit">${unitOptions(r.unit||db.ingredients.find(x=>x.id===r.ref)?.unit||"unidad")}</select></label>
+ <button class="remove-row" data-action="remove-row">×</button></div>`).join("")||`<div class="empty">Agrega los materiales que utiliza el producto.</div>`;
+}
+function toolEditor(p){
+ return (p.tools||[]).map(t=>`<div class="resource-row tool-row">
+ <label class="field">Equipo / herramienta<select class="t-ref">${db.equipment.map(x=>`<option value="${x.id}" ${x.id===t.ref?"selected":""}>${esc(x.name)}</option>`).join("")}</select></label>
+ <label class="field">Forma de cálculo<select class="t-method"><option value="perUnit" ${t.method==="perUnit"?"selected":""}>Por unidad</option><option value="percent" ${t.method==="percent"?"selected":""}>Por porcentaje</option><option value="time" ${t.method==="time"?"selected":""}>Por tiempo de uso</option><option value="fixed" ${t.method==="fixed"?"selected":""}>Costo fijo por producto</option></select></label>
+ <label class="field">Valor<input class="t-value" type="number" step=".01" value="${t.value??1}"></label>
+ <label class="field">Unidad<select class="t-unit">${unitOptions(t.unit||"pieza")}</select></label>
+ <button class="remove-row" data-action="remove-row">×</button></div>`).join("")||`<div class="empty">Agrega las herramientas que utiliza el producto.</div>`;
+}
+function serviceEditor(p){
+ return (p.services||[]).map(s=>`<div class="resource-row service-row">
+ <label class="field">Servicio<select class="s-ref">${db.services.map(x=>`<option value="${x.id}" ${x.id===s.ref?"selected":""}>${esc(x.name)}</option>`).join("")}</select></label>
+ <label class="field">Forma de cálculo<select class="s-method"><option value="percent" ${s.method==="percent"?"selected":""}>Por porcentaje</option><option value="perUnit" ${s.method==="perUnit"?"selected":""}>Costo por unidad</option></select></label>
+ <label class="field">Valor<input class="s-value" type="number" step=".01" value="${s.value??100}"></label>
+ <button class="remove-row" data-action="remove-row">×</button></div>`).join("")||`<div class="empty">Agrega servicios si aplica.</div>`;
+}
+function packEditor(p){
+ return (p.packaging||[]).map(r=>`<div class="resource-row pack-row">
+ <label class="field">Empaque<select class="pk-ref">${db.packaging.map(x=>`<option value="${x.id}" ${x.id===r.ref?"selected":""}>${esc(x.name)}</option>`).join("")}</select></label>
+ <label class="field">Cantidad<input class="pk-qty" type="number" step=".01" value="${r.qty}"></label>
+ <label class="field">Unidad<select class="pk-unit">${unitOptions(r.unit||"pieza","count")}</select></label>
+ <button class="remove-row" data-action="remove-row">×</button></div>`).join("")||`<div class="empty">Agrega empaques si aplica.</div>`;
+}
 
 function resourceModal(type,id){
  const meta=resourceMeta[type], x=id?db[type].find(y=>y.id===id):{};
  const fields=meta.fields.map(([key,label,t])=>`<label class="field">${label}<input id="r_${key}" type="${t}" value="${esc(x[key]??"")}"></label>`).join("");
  return `<div class="modal-backdrop"><div class="modal"><div class="modal-head"><h2>${id?"Editar":"Agregar"} ${meta.title}</h2><button class="close" data-action="close-modal">×</button></div><div class="modal-body"><div class="form-grid">${fields}</div></div><div class="modal-foot"><button class="btn" data-action="close-modal">Cancelar</button><button class="btn primary" data-action="save-resource" data-type="${type}" data-id="${id||""}">Guardar</button></div></div></div>`;
 }
-function modal(html){document.getElementById("modalRoot").innerHTML=html}
+function modal(html){document.getElementById("modalRoot").innerHTML=html;bindModal?.();liveProductCalc?.()}
 function closeModal(){document.getElementById("modalRoot").innerHTML=""}
 function toast(msg){const x=document.getElementById("toast");x.textContent=msg;x.classList.add("show");setTimeout(()=>x.classList.remove("show"),2200)}
 function bind(){
@@ -175,7 +320,7 @@ function bind(){
 function action(a,b){
  const id=b.dataset.id,type=b.dataset.type;
  if(a==="new-product")modal(productModal());
- if(a==="edit-product"){currentProductId=id;modal(productModal(id))}
+ if(a==="edit-product"){currentProductId=id;modal(productModal(id));bindModal();liveProductCalc()}
  if(a==="delete-product"){if(confirm("¿Eliminar este producto?")){db.products=db.products.filter(x=>x.id!==id);if(currentProductId===id)currentProductId=db.products[0]?.id;save();render();toast("Producto eliminado")}}
  if(a==="new-resource")modal(resourceModal(type));
  if(a==="edit-resource")modal(resourceModal(type,id));
@@ -183,33 +328,47 @@ function action(a,b){
  if(a==="close-modal")closeModal();
  if(a==="save-product")saveProduct(id);
  if(a==="save-resource")saveResource(type,id);
- if(a==="add-recipe-row"){
-  const rows=[...document.querySelectorAll("#recipeEditor .recipe-row")].map(r=>({ref:r.querySelector(".r-ref").value,qty:num(r.querySelector(".r-qty").value)}));
-  rows.push({ref:db.ingredients[0]?.id||"",qty:1});
-  document.getElementById("recipeEditor").innerHTML=recipeEditor({recipe:rows});
- }
- if(a==="add-pack-row"){
-  const rows=[...document.querySelectorAll("#packEditor .pack-row")].map(r=>({ref:r.querySelector(".pk-ref").value,qty:num(r.querySelector(".pk-qty").value)}));
-  rows.push({ref:db.packaging[0]?.id||"",qty:1});
-  document.getElementById("packEditor").innerHTML=packEditor({packaging:rows});
- }
- if(a==="go-sim"){currentView="simulator";render()}
- if(a==="product-tab"){currentProductId=id;currentView="simulator";render();toast(b.dataset.tab==="ingredients"?"Los ingredientes se editan desde el producto.":"Abriendo simulador para revisar el cálculo.")}
+ if(a==="add-recipe-row"){document.getElementById("recipeEditor").insertAdjacentHTML("beforeend",`<div class="resource-row recipe-row"><label class="field">Insumo<select class="r-ref">${db.ingredients.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select></label><label class="field">Cantidad<input class="r-qty" type="number" step=".0001" value="1"></label><label class="field">Unidad<select class="r-unit">${unitOptions(db.ingredients[0]?.unit||"kg")}</select></label><button class="remove-row" data-action="remove-row">×</button></div>`);bindModal();liveProductCalc()}
+ if(a==="add-tool-row"){document.getElementById("toolEditor").insertAdjacentHTML("beforeend",`<div class="resource-row tool-row"><label class="field">Equipo / herramienta<select class="t-ref">${db.equipment.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select></label><label class="field">Forma de cálculo<select class="t-method"><option value="perUnit">Por unidad</option><option value="percent">Por porcentaje</option><option value="time">Por tiempo de uso</option><option value="fixed">Costo fijo por producto</option></select></label><label class="field">Valor<input class="t-value" type="number" step=".01" value="1"></label><label class="field">Unidad<select class="t-unit">${unitOptions("pieza")}</select></label><button class="remove-row" data-action="remove-row">×</button></div>`);bindModal();liveProductCalc()}
+ if(a==="add-service-row"){document.getElementById("serviceEditor").insertAdjacentHTML("beforeend",`<div class="resource-row service-row"><label class="field">Servicio<select class="s-ref">${db.services.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select></label><label class="field">Forma de cálculo<select class="s-method"><option value="percent">Por porcentaje</option><option value="perUnit">Costo por unidad</option></select></label><label class="field">Valor<input class="s-value" type="number" step=".01" value="100"></label><button class="remove-row" data-action="remove-row">×</button></div>`);bindModal();liveProductCalc()}
+ if(a==="add-pack-row"){document.getElementById("packEditor").insertAdjacentHTML("beforeend",`<div class="resource-row pack-row"><label class="field">Empaque<select class="pk-ref">${db.packaging.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select></label><label class="field">Cantidad<input class="pk-qty" type="number" step=".01" value="1"></label><label class="field">Unidad<select class="pk-unit">${unitOptions("pieza","count")}</select></label><button class="remove-row" data-action="remove-row">×</button></div>`);bindModal();liveProductCalc()}
+ if(a==="remove-row"){b.closest(".resource-row")?.remove();liveProductCalc()}
+ if(a==="go-sim"){currentProductId=id||currentProductId;currentView="simulator";render()}
+ if(a==="product-tab"){currentProductId=id;currentView="simulator";render()}
  if(a==="reset-sim")render();
  if(a==="save-settings"){db.business.name=document.getElementById("setName").value.trim()||"Tu Negocio";db.business.type=document.getElementById("setType").value.trim()||"Negocio";db.business.currency=document.getElementById("setCurrency").value;save();render();toast("Configuración guardada")}
  if(a==="export-json")exportData();
  if(a==="import-json")importData();
- if(a==="clear-data"){if(confirm("Esto borrará los datos locales y volverá al ejemplo inicial. ¿Continuar?")){db=structuredClone(seed);save();render();toast("Datos restablecidos")}}
+ if(a==="clear-data"){if(confirm("Esto borrará los datos locales y volverá al ejemplo inicial. ¿Continuar?")){db=clone(seed);save();render();toast("Datos restablecidos")}}
  if(a==="print-report")window.print();
  if(a==="help")helpModal();
  if(a==="notifications")toast("No tienes notificaciones nuevas.");
 }
 function saveProduct(id){
- const p=id?db.products.find(x=>x.id===id):{id:uid("p"),recipe:[],packaging:[]};
- p.name=document.getElementById("pName").value.trim()||"Producto sin nombre";p.category=document.getElementById("pCategory").value.trim()||"General";p.unit=document.getElementById("pUnit").value.trim()||"unidad";p.yield=num(document.getElementById("pYield").value)||1;p.timeMin=num(document.getElementById("pTime").value);p.targetMargin=num(document.getElementById("pMargin").value);p.transportKm=num(document.getElementById("pKm").value);p.mermaPct=num(document.getElementById("pWaste").value);p.monthlyUnits=Math.max(1,num(document.getElementById("pMonthlyUnits").value)||300);p.description=document.getElementById("pDesc").value.trim();p.laborRef=document.getElementById("pLabor").value;p.laborMin=num(document.getElementById("pLaborMin").value);
- p.recipe=[...document.querySelectorAll(".recipe-row")].map(r=>({ref:r.querySelector(".r-ref").value,qty:num(r.querySelector(".r-qty").value)}));
- p.packaging=[...document.querySelectorAll(".pack-row")].map(r=>({ref:r.querySelector(".pk-ref").value,qty:num(r.querySelector(".pk-qty").value)}));
- if(!id)db.products.push(p);currentProductId=p.id;save();closeModal();currentView="dashboard";render();toast("Producto guardado correctamente");
+ const p=id?db.products.find(x=>x.id===id):{id:uid("p")};
+ p.name=document.getElementById("pName").value.trim()||"Producto sin nombre";
+ p.category=document.getElementById("pCategory").value.trim()||"General";
+ p.unit=document.getElementById("pUnit").value.trim()||"unidad";
+ p.batchQty=num(document.getElementById("pYield").value)||1;
+ p.yield=p.batchQty;
+ p.timeValue=num(document.getElementById("pTimeValue").value);
+ p.timeMin=p.timeValue;
+ p.timeUnit=document.getElementById("pTimeUnit").value;
+ p.targetMargin=num(document.getElementById("pMargin").value);
+ p.monthlyUnits=Math.max(1,num(document.getElementById("pMonthlyUnits").value)||300);
+ p.transportKm=num(document.getElementById("pKm").value);
+ p.mermaPct=num(document.getElementById("pWaste").value);
+ p.description=document.getElementById("pDesc").value.trim();
+ p.laborRef=document.getElementById("pLabor").value;
+ p.laborValue=num(document.getElementById("pLaborMin").value);
+ p.laborMin=p.laborValue;
+ p.laborUnit=document.getElementById("pLaborUnit").value;
+ p.recipe=[...document.querySelectorAll(".recipe-row")].map(r=>({ref:r.querySelector(".r-ref").value,qty:num(r.querySelector(".r-qty").value),unit:r.querySelector(".r-unit").value}));
+ p.tools=[...document.querySelectorAll(".tool-row")].map(r=>({ref:r.querySelector(".t-ref").value,method:r.querySelector(".t-method").value,value:num(r.querySelector(".t-value").value),unit:r.querySelector(".t-unit").value}));
+ p.services=[...document.querySelectorAll(".service-row")].map(r=>({ref:r.querySelector(".s-ref").value,method:r.querySelector(".s-method").value,value:num(r.querySelector(".s-value").value)}));
+ p.packaging=[...document.querySelectorAll(".pack-row")].map(r=>({ref:r.querySelector(".pk-ref").value,qty:num(r.querySelector(".pk-qty").value),unit:r.querySelector(".pk-unit").value}));
+ if(!id)db.products.push(p);
+ normalizeProduct(p);currentProductId=p.id;save();closeModal();currentView="dashboard";render();toast("Producto guardado correctamente");
 }
 function saveResource(type,id){
  const meta=resourceMeta[type];let x=id?db[type].find(y=>y.id===id):{id:uid(type[0])};

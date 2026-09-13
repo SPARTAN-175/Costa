@@ -30,3 +30,7 @@ Aplicación web estática, sin Firebase y sin servidor. Funciona en GitHub Pages
 6. Guarda y abre la URL que GitHub genere.
 
 No necesita Firebase, Node, npm ni base de datos para esta primera versión.
+
+
+## v1.1 mejorada
+Ahora cada producto puede asociar equipos/herramientas y servicios, con métodos de asignación por unidad, porcentaje, tiempo o costo fijo. También admite unidades compatibles (g/kg, mL/L, etc.) y tiempos en minutos, horas, días, semanas y meses.
