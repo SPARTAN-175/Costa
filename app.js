@@ -43,6 +43,25 @@ const UNIT_GROUPS={
 const UNIT_LIST=Object.entries(UNIT_GROUPS).flatMap(([group,g])=>g.options.map(([value,label])=>({value,label,group})));
 function unitOptions(selected="",group=""){return UNIT_LIST.filter(x=>!group||x.group===group).map(x=>`<option value="${x.value}" ${x.value===selected?"selected":""}>${x.label}</option>`).join("")}
 function unitGroup(unit){return UNIT_LIST.find(x=>x.value===unit)?.group||null}
+const PRODUCT_CATEGORIES=["Alimentos","Bebidas","Panadería y repostería","Artesanías","Textiles y ropa","Muebles","Tecnología","Servicios","Reparaciones","Construcción","Agricultura","Productos personalizados","Otro"];
+const SALE_UNITS=["pieza","unidad","kg","g","L","mL","metro","m²","par","docena","paquete","caja","lote","servicio","Otro"];
+function selectOptions(list,selected){
+ return list.map(x=>`<option value="${esc(x)}" ${x===selected?"selected":""}>${esc(x)}</option>`).join("");
+}
+function productCategoryUI(category){
+ const known=PRODUCT_CATEGORIES.includes(category);
+ return `<select id="pCategory">${selectOptions(PRODUCT_CATEGORIES,known?category:"Otro")}</select><input id="pCategoryCustom" class="custom-field" value="${esc(known?"":category)}" placeholder="Escribe la categoría" style="${known?"display:none":""}">`;
+}
+function saleUnitUI(unit){
+ const known=SALE_UNITS.includes(unit);
+ return `<select id="pUnit">${selectOptions(SALE_UNITS,known?unit:"Otro")}</select><input id="pUnitCustom" class="custom-field" value="${esc(known?"":unit)}" placeholder="Ej. molde, rollo, paquete de 50..." style="${known?"display:none":""}">`;
+}
+function toggleCustomProductFields(){
+ const c=document.getElementById("pCategory"),cc=document.getElementById("pCategoryCustom"),u=document.getElementById("pUnit"),uc=document.getElementById("pUnitCustom");
+ if(c&&cc)cc.style.display=c.value==="Otro"?"":"none";
+ if(u&&uc)uc.style.display=u.value==="Otro"?"":"none";
+}
+
 function convertQty(q,from,to){
  if(from===to)return num(q);
  const a=UNIT_LIST.find(x=>x.value===from),b=UNIT_LIST.find(x=>x.value===to);
@@ -54,7 +73,8 @@ function normalizeProduct(p){
  p.unit=p.unit||"unidad";
  p.timeValue=num(p.timeValue??p.timeMin);
  p.timeUnit=p.timeUnit||"min";
- p.monthlyUnits=num(p.monthlyUnits)||300;
+ p.monthlyUnits=num(p.monthlyUnits)||1;
+ p.overheadMode=p.overheadMode||"monthly";
  p.mermaPct=num(p.mermaPct);
  p.recipe=(p.recipe||[]).map(r=>({...r,unit:r.unit||db.ingredients.find(i=>i.id===r.ref)?.unit||"unidad"}));
  p.packaging=p.packaging||[];
@@ -122,11 +142,12 @@ function productCosts(p){
  const unassignedEquipment=db.equipment.reduce((sum,e)=>usedEquipment.has(e.id)?sum:sum+Math.max(0,(num(e.purchase)-num(e.residual))/Math.max(1,num(e.lifeMonths))),0);
  const unassignedServices=db.services.reduce((sum,s)=>usedServices.has(s.id)?sum:sum+num(s.monthly)*num(s.businessPct)/100,0);
  const monthlyFixed=unassignedEquipment+unassignedServices+fixedMonthlyCost()+monthlyMarketing();
- const fixedAllocated=monthlyFixed/Math.max(1,num(p.monthlyUnits||300))*batch;
+ const fixedAllocated=p.overheadMode==="full"?monthlyFixed/Math.max(1,num(p.monthlyUnits||1))*batch:0;
+ const marketingAllocated=p.overheadMode==="full"?monthlyMarketing()/Math.max(1,num(p.monthlyUnits||1))*batch:0;
  const fullBatch=variableBatch+toolBatch+serviceBatch+fixedAllocated;
  return {
    materials,packaging,labor:laborBatch,transport:transportPerUnit*batch,
-   tools:toolBatch,services:serviceBatch,waste,fixedAllocated,
+   tools:toolBatch,services:serviceBatch,waste,fixedAllocated,marketingAllocated,
    variableBatch,variable:variableBatch/batch,total:fullBatch,batchTotal:fullBatch,
    perUnit:fullBatch/batch,yieldQty:batch,fixedMonthly:monthlyFixed,
    variablePerUnit:variableBatch/batch,overhead:(toolBatch+serviceBatch+fixedAllocated)/batch
@@ -159,7 +180,7 @@ function dashboard(){
  return head("Inicio","Vista general de tus costos, precios y rentabilidad.",`<button class="btn primary" data-action="new-product">＋ Nuevo producto</button>`)+
  `<div class="card section-card hero-product"><div class="pizza-art"></div><div style="flex:1"><h2>${esc(p.name)} <button class="btn small" data-action="edit-product" data-id="${p.id}">✎</button></h2><p>${esc(p.description||"")}</p><span class="tag">${esc(p.category||"Producto")}</span> <span class="tag gray">${esc(p.unit||"unidad")}</span><span class="tag gray">${num(p.timeValue??p.timeMin)} ${esc(p.timeUnit||"min")}</span></div></div>
  <div class="tabs"><button class="tab active">▣ Resumen</button><button class="tab" data-action="product-tab" data-id="${p.id}" data-tab="ingredients">◇ Ingredientes</button><button class="tab" data-action="product-tab" data-id="${p.id}" data-tab="indirect">⚙ Costos indirectos</button><button class="tab" data-action="product-tab" data-id="${p.id}" data-tab="price">▥ Precio y ganancia</button><button class="tab" data-action="go-sim" data-id="${p.id}">▦ Simulador</button></div>
- <div class="cards"><div class="card metric"><div class="label">Costo total por unidad</div><div class="value">${money(c.total)}</div><div class="progress"><i style="width:${Math.min(100,c.direct/c.total*100)}%"></i></div><div class="hint">Variables ${money(c.variable)} · Costos asignados ${money(c.overhead)}</div></div>
+ <div class="cards"><div class="card metric"><div class="label">Costo total por unidad</div><div class="value">${money(c.total)}</div><div class="progress"><i style="width:${Math.min(100,c.direct/c.total*100)}%"></i></div><div class="hint">Variables ${money(c.variable)} · ${p.overheadMode==="full"?"Fijos asignados "+money(c.fixedAllocated/c.yieldQty):"Fijos no asignados"}</div></div>
  <div class="card metric good"><div class="label">Precio sugerido</div><div class="value">${money(sp)}</div><div class="hint">Ganancia estimada <b>${money(sp-c.total)}</b> por unidad · margen ${num(p.targetMargin).toFixed(1)}%</div></div>
  <div class="card metric"><div class="label">Punto de equilibrio</div><div class="value">${Number.isFinite(be)?be+" u/mes":"—"}</div><div class="hint">Con tus costos actuales y precio sugerido.</div></div></div>
  <div class="grid2"><div class="card section-card"><div class="section-title"><h3>Ingredientes / Insumos</h3><button class="btn small" data-action="product-tab" data-id="${p.id}" data-tab="ingredients">Ver todo</button></div>${recipeTable(p,c)}</div>
@@ -183,17 +204,17 @@ function recipeTable(p,c){
  return `<div class="table-wrap"><table class="table"><thead><tr><th>Insumo</th><th>Cantidad</th><th>Costo unitario</th><th>Costo</th></tr></thead><tbody>${rows||`<tr><td colspan="4"><div class="empty">Sin materiales asociados.</div></td></tr>`}</tbody><tfoot><tr><td colspan="3"><b>Total directos</b></td><td class="money"><b>${money(c.materials+c.packaging)}</b></td></tr></tfoot></table></div>`;
 }
 function indirectTable(c){
- const monthlyUnits=c.monthlyUnits;
- const arr=[
- ["Equipo y herramientas",equipmentMonthly()/monthlyUnits],
- ["Servicios",serviceMonthly()/monthlyUnits],
- ["Espacio / gastos fijos",fixedMonthlyCost()/monthlyUnits],
- ["Marketing y ventas",marketingMonthly()/monthlyUnits],
- ["Transporte (promedio)",c.transport],
- ["Mano de obra",c.labor],
- ["Merma / desperdicio",c.waste]
+ const rows=[
+ ["Equipo y herramientas",c.tools/c.yieldQty],
+ ["Servicios",c.services/c.yieldQty],
+ ["Espacio / gastos fijos",c.fixedAllocated/c.yieldQty],
+ ["Marketing y ventas",c.marketingAllocated/c.yieldQty],
+ ["Transporte",c.transport/c.yieldQty],
+ ["Mano de obra",c.labor/c.yieldQty],
+ ["Merma / desperdicio",c.waste/c.yieldQty]
  ];
- return `<div class="table-wrap"><table class="table"><thead><tr><th>Concepto</th><th>Costo por unidad</th></tr></thead><tbody>${arr.map(x=>`<tr><td>${x[0]}</td><td class="money">${money(x[1])}</td></tr>`).join("")}</tbody><tfoot><tr><td><b>Total otros costos</b></td><td class="money"><b>${money(c.total-c.direct)}</b></td></tr></tfoot></table></div>`;
+ const total=rows.reduce((s,x)=>s+x[1],0);
+ return `<div class="table-wrap"><table class="table"><thead><tr><th>Concepto</th><th>Costo por unidad</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${x[0]}</td><td class="money">${money(x[1])}</td></tr>`).join("")}</tbody><tfoot><tr><td><b>Total mostrado</b></td><td class="money"><b>${money(total)}</b></td></tr></tfoot></table></div><div class="note" style="margin-top:8px">Los gastos fijos solo aparecen aquí cuando el producto tiene activado <b>“Costo completo”</b>. Los costos directos como transporte, mano de obra, herramientas, servicios y merma sí se calculan aunque el producto se venda ocasionalmente.</div>`;
 }
 
 function products(){
@@ -221,17 +242,26 @@ function resources(type,title){
 
 function liveProductCalc(){
  const modalEl=document.querySelector("#modalRoot .modal");if(!modalEl)return;
- const p={batchQty:num(document.getElementById("pYield")?.value)||1,monthlyUnits:num(document.getElementById("pMonthlyUnits")?.value)||300,mermaPct:num(document.getElementById("pWaste")?.value),transportKm:num(document.getElementById("pKm")?.value),laborRef:document.getElementById("pLabor")?.value,laborValue:num(document.getElementById("pLaborMin")?.value),laborUnit:document.getElementById("pLaborUnit")?.value,recipe:[],tools:[],services:[],packaging:[]};
+ const p={batchQty:num(document.getElementById("pYield")?.value)||1,monthlyUnits:num(document.getElementById("pMonthlyUnits")?.value)||1,overheadMode:document.getElementById("pOverheadMode")?.value||"direct",mermaPct:num(document.getElementById("pWaste")?.value),transportKm:num(document.getElementById("pKm")?.value),laborRef:document.getElementById("pLabor")?.value,laborValue:num(document.getElementById("pLaborMin")?.value),laborUnit:document.getElementById("pLaborUnit")?.value,recipe:[],tools:[],services:[],packaging:[]};
  document.querySelectorAll(".recipe-row").forEach(r=>p.recipe.push({ref:r.querySelector(".r-ref").value,qty:num(r.querySelector(".r-qty").value),unit:r.querySelector(".r-unit").value}));
  document.querySelectorAll(".tool-row").forEach(r=>p.tools.push({ref:r.querySelector(".t-ref").value,method:r.querySelector(".t-method").value,value:num(r.querySelector(".t-value").value),unit:r.querySelector(".t-unit").value}));
  document.querySelectorAll(".service-row").forEach(r=>p.services.push({ref:r.querySelector(".s-ref").value,method:r.querySelector(".s-method").value,value:num(r.querySelector(".s-value").value)}));
  document.querySelectorAll(".pack-row").forEach(r=>p.packaging.push({ref:r.querySelector(".pk-ref").value,qty:num(r.querySelector(".pk-qty").value),unit:r.querySelector(".pk-unit").value}));
  const c=productCosts(p),margin=num(document.getElementById("pMargin")?.value),sp=priceFromMargin(c.perUnit,margin),box=document.getElementById("liveProductCalc");
- if(box)box.innerHTML=`<small>Costo completo estimado por ${esc(document.getElementById("pUnit")?.value||"unidad")}</small><div class="big">${money(c.perUnit)}</div><small>Materiales ${money(c.materials/c.yieldQty)} · Mano de obra ${money(c.labor/c.yieldQty)} · Herramientas ${money(c.tools/c.yieldQty)} · Servicios ${money(c.services/c.yieldQty)} · Fijos asignados ${money(c.fixedAllocated/c.yieldQty)}</small><div style="margin-top:8px"><b>Precio sugerido con ${margin.toFixed(1)}% de margen: ${money(sp)}</b></div>`;
+ if(box)box.innerHTML=`<small>Costo completo estimado por ${esc(document.getElementById("pUnit")?.value||"unidad")}</small><div class="big">${money(c.perUnit)}</div><small>Materiales ${money(c.materials/c.yieldQty)} · Mano de obra ${money(c.labor/c.yieldQty)} · Herramientas ${money(c.tools/c.yieldQty)} · Servicios ${money(c.services/c.yieldQty)} · ${(document.getElementById("pOverheadMode")?.value==="full"?"Fijos asignados":"Fijos no asignados")} ${money(c.fixedAllocated/c.yieldQty)}</small><div style="margin-top:8px"><b>Precio sugerido con ${margin.toFixed(1)}% de margen: ${money(sp)}</b></div>`;
+}
+
+function syncRecipeUnit(changed){
+ if(changed?.id==="pCategory"||changed?.id==="pUnit")return;
+ if(changed?.classList?.contains("r-ref")){
+   const row=changed.closest(".recipe-row"), ing=db.ingredients.find(x=>x.id===changed.value);
+   const unit=row?.querySelector(".r-unit");
+   if(unit&&ing){unit.innerHTML=unitOptions(ing.unit);unit.value=ing.unit;}
+ }
 }
 function bindModal(){
  document.querySelectorAll("#modalRoot [data-action]").forEach(x=>{if(!x._costaBound){x.onclick=()=>action(x.dataset.action,x);x._costaBound=true}});
- document.querySelectorAll("#modalRoot input,#modalRoot select,#modalRoot textarea").forEach(x=>{if(!x._costaInputBound){x.addEventListener("input",liveProductCalc);x.addEventListener("change",liveProductCalc);x._costaInputBound=true}});
+ document.querySelectorAll("#modalRoot input,#modalRoot select,#modalRoot textarea").forEach(x=>{if(!x._costaInputBound){x.addEventListener("input",()=>{toggleCustomProductFields();liveProductCalc()});x.addEventListener("change",()=>{toggleCustomProductFields();syncRecipeUnit(x);liveProductCalc()});x._costaInputBound=true}});toggleCustomProductFields();
 }
 function simulator(){
  const p=db.products.find(x=>x.id===currentProductId)||db.products[0]; if(!p)return head("Simulador")+"<div class='card empty'>Primero crea un producto.</div>";
@@ -253,18 +283,19 @@ function settings(){
 }
 
 function productModal(id){
- const p=id?normalizeProduct(db.products.find(x=>x.id===id)):normalizeProduct({id:"",name:"",description:"",category:"Producto",unit:"unidad",batchQty:1,timeValue:20,timeUnit:"min",targetMargin:40,monthlyUnits:300,mermaPct:5,transportKm:0,recipe:[],tools:[],services:[],packaging:[],laborRef:db.labor[0]?.id||"",laborValue:20,laborUnit:"min"});
+ const p=id?normalizeProduct(db.products.find(x=>x.id===id)):normalizeProduct({id:"",name:"",description:"",category:"Otro",unit:"unidad",batchQty:1,timeValue:20,timeUnit:"min",targetMargin:40,monthlyUnits:1,overheadMode:"direct",mermaPct:5,transportKm:0,recipe:[],tools:[],services:[],packaging:[],laborRef:db.labor[0]?.id||"",laborValue:20,laborUnit:"min"});
  return `<div class="modal-backdrop" data-modal-bg><div class="modal"><div class="modal-head"><h2>${id?"Editar producto":"Nuevo producto"}</h2><button class="close" data-action="close-modal">×</button></div><div class="modal-body">
  <div class="alert success">COSTA acepta piezas, kg, litros, metros, lotes, servicios y más. El tiempo puede expresarse en minutos, horas, días, semanas o meses.</div>
  <div class="form-grid">
  <label class="field">Nombre<input id="pName" value="${esc(p.name)}"></label>
- <label class="field">Categoría<input id="pCategory" value="${esc(p.category)}"></label>
- <label class="field">Unidad de venta<input id="pUnit" value="${esc(p.unit)}" placeholder="pieza, kg, litro, servicio..."></label>
+ <label class="field">Categoría${productCategoryUI(p.category)}</label>
+ <label class="field">Unidad de venta${saleUnitUI(p.unit)}</label>
  <label class="field">Unidades obtenidas por lote<input id="pYield" type="number" step=".001" value="${p.batchQty}"></label>
  <label class="field">Tiempo de elaboración<input id="pTimeValue" type="number" step=".01" value="${p.timeValue}"></label>
  <label class="field">Unidad de tiempo<select id="pTimeUnit">${unitOptions(p.timeUnit,"time")}</select></label>
  <label class="field">Margen objetivo (%)<input id="pMargin" type="number" step=".1" value="${p.targetMargin}"></label>
  <label class="field">Producción estimada al mes<input id="pMonthlyUnits" type="number" value="${p.monthlyUnits}"></label>
+ <label class="field">Tratamiento de gastos fijos<select id="pOverheadMode"><option value="direct" ${p.overheadMode==="direct"?"selected":""}>Solo costos del producto (recomendado)</option><option value="full" ${p.overheadMode==="full"?"selected":""}>Costo completo: repartir gastos fijos</option></select></label>
  <label class="field">Km de transporte por unidad<input id="pKm" type="number" step=".01" value="${p.transportKm}"></label>
  <label class="field">Merma (%)<input id="pWaste" type="number" step=".1" value="${p.mermaPct}"></label>
  <label class="field full">Descripción<textarea id="pDesc">${esc(p.description)}</textarea></label></div>
@@ -379,15 +410,16 @@ function saveProduct(id){
  const errors=validateProductBeforeSave();if(errors.length){alert(errors.join("\n"));return;}
  const p=id?db.products.find(x=>x.id===id):{id:uid("p")};
  p.name=document.getElementById("pName").value.trim()||"Producto sin nombre";
- p.category=document.getElementById("pCategory").value.trim()||"General";
- p.unit=document.getElementById("pUnit").value.trim()||"unidad";
+ p.category=(document.getElementById("pCategory").value==="Otro"?document.getElementById("pCategoryCustom").value.trim():"")||document.getElementById("pCategory").value||"General";
+ p.unit=(document.getElementById("pUnit").value==="Otro"?document.getElementById("pUnitCustom").value.trim():"")||document.getElementById("pUnit").value||"unidad";
  p.batchQty=num(document.getElementById("pYield").value)||1;
  p.yield=p.batchQty;
  p.timeValue=num(document.getElementById("pTimeValue").value);
  p.timeMin=p.timeValue;
  p.timeUnit=document.getElementById("pTimeUnit").value;
  p.targetMargin=num(document.getElementById("pMargin").value);
- p.monthlyUnits=Math.max(1,num(document.getElementById("pMonthlyUnits").value)||300);
+ p.monthlyUnits=Math.max(1,num(document.getElementById("pMonthlyUnits").value)||1);
+ p.overheadMode=document.getElementById("pOverheadMode").value;
  p.transportKm=num(document.getElementById("pKm").value);
  p.mermaPct=num(document.getElementById("pWaste").value);
  p.description=document.getElementById("pDesc").value.trim();
