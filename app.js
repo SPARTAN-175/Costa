@@ -1,28 +1,22 @@
-const KEY="costa_v1";
+const KEY="costa_v2";
 const seed={
- business:{name:"Tu Negocio",type:"Negocio en casa",currency:"MXN"},
+ business:{name:"Mi Negocio",type:"Emprendimiento",currency:"MXN",phone:"",whatsapp:"",address:"",city:"",email:"",logo:"",tagline:"Calidad en cada detalle",ticketMessage:"Gracias por considerar nuestro producto."},
  ingredients:[
-  {id:"i1",name:"Harina de trigo",unit:"kg",packQty:10,packPrice:300},
-  {id:"i2",name:"Queso mozzarella",unit:"kg",packQty:2,packPrice:180},
-  {id:"i3",name:"Jamón",unit:"kg",packQty:1,packPrice:250},
-  {id:"i4",name:"Piña",unit:"kg",packQty:2,packPrice:80},
-  {id:"i5",name:"Salsa de tomate",unit:"kg",packQty:2,packPrice:80},
-  {id:"i6",name:"Aceite",unit:"L",packQty:1,packPrice:50},
-  {id:"i7",name:"Sal, azúcar y levadura",unit:"kg",packQty:1,packPrice:20}
+  {id:"i1",name:"Cera de soya",unit:"kg",packQty:1,packPrice:180,productType:"Artesanías"},
+  {id:"i2",name:"Esencia aromática",unit:"ml",packQty:250,packPrice:95,productType:"Artesanías"},
+  {id:"i3",name:"Mecha de algodón",unit:"pieza",packQty:25,packPrice:60,productType:"Artesanías"}
  ],
- equipment:[{id:"e1",name:"Horno",purchase:8000,lifeMonths:60,residual:0},{id:"e2",name:"Refrigerador",purchase:9000,lifeMonths:84,residual:0}],
- services:[{id:"s1",name:"Electricidad",monthly:900,businessPct:30},{id:"s2",name:"Gas",monthly:600,businessPct:100},{id:"s3",name:"Agua",monthly:300,businessPct:20},{id:"s4",name:"Internet / Teléfono",monthly:500,businessPct:20}],
- transport:[{id:"t1",name:"Reparto local",costPerKm:3.2}],
+ equipment:[{id:"e1",name:"Herramientas generales",purchase:1200,lifeMonths:48,residual:0}],
+ services:[{id:"s1",name:"Electricidad",monthly:500,businessPct:20}],
+ transport:[{id:"t1",name:"Reparto local",costPerKm:3}],
  labor:[{id:"l1",name:"Producción",hourRate:60}],
- packaging:[{id:"p1",name:"Caja para pizza",unitPrice:8},{id:"p2",name:"Servilletas",unitPrice:.6}],
- fixed:[{id:"f1",name:"Espacio / lugar",monthly:4000,businessPct:20}],
- marketing:[{id:"m1",name:"Publicidad",monthly:500}],
+ packaging:[{id:"p1",name:"Caja",unitPrice:4}],
+ fixed:[{id:"f1",name:"Espacio de trabajo",monthly:800,businessPct:20}],
+ marketing:[{id:"m1",name:"Publicidad",monthly:200}],
  products:[
-  {id:"p1",name:"Pizza Hawaiana",description:"Pizza artesanal con jamón, piña y queso mozzarella.",category:"Comida",unit:"pizza",yield:1,timeMin:20,price:135,targetMargin:37.6,
-   recipe:[{ref:"i1",qty:.3},{ref:"i2",qty:.25},{ref:"i3",qty:.1},{ref:"i4",qty:.1},{ref:"i5",qty:.1},{ref:"i6",qty:.01},{ref:"i7",qty:.015}],
-   packaging:[{ref:"p1",qty:1}],laborRef:"l1",laborMin:20,transportKm:1.25,mermaPct:5,monthlyUnits:300},
-  {id:"p2",name:"Pizza Pepperoni",description:"Pizza con mozzarella y pepperoni.",category:"Comida",unit:"pizza",yield:1,timeMin:20,price:145,targetMargin:40,
-   recipe:[{ref:"i1",qty:.3},{ref:"i2",qty:.25},{ref:"i5",qty:.1}],packaging:[{ref:"p1",qty:1}],laborRef:"l1",laborMin:20,transportKm:1.25,mermaPct:5,monthlyUnits:300}
+  {id:"p1",name:"Vela aromática",description:"Vela artesanal de cera de soya con aroma suave y presentación cuidada.",category:"Artesanías",unit:"pieza",batchQty:1,yield:1,timeValue:30,timeMin:30,timeUnit:"min",price:95,targetMargin:40,
+   recipe:[{ref:"i1",qty:.18,unit:"kg"},{ref:"i2",qty:12,unit:"mL"},{ref:"i3",qty:1,unit:"pieza"}],
+   packaging:[{ref:"p1",qty:1,unit:"pieza"}],laborRef:"l1",laborValue:30,laborMin:30,laborUnit:"min",transportKm:0,mermaPct:3,monthlyUnits:100,overheadMode:"direct",tools:[],services:[],fixed:[],marketing:[]}
  ],
  sales:[]
 };
@@ -68,6 +62,11 @@ function convertQty(q,from,to){
  if(!a||!b||a.group!==b.group)return null;
  return num(q)*(UNIT_GROUPS[a.group].factor[from]/UNIT_GROUPS[b.group].factor[to]);
 }
+function normalizeBusiness(){
+ db.business={...seed.business,...(db.business||{})};
+ db.business.currency=db.business.currency||"MXN";
+ db.ingredients=(db.ingredients||[]).map(i=>({...i,productType:i.productType||"Todos",unit:i.unit||"unidad"}));
+}
 function normalizeProduct(p){
  p.batchQty=num(p.batchQty??p.yield)||1;
  p.unit=p.unit||"unidad";
@@ -88,6 +87,7 @@ function normalizeProduct(p){
  p.laborUnit=p.laborUnit||"min";
  return p;
 }
+normalizeBusiness();
 db.products.forEach(normalizeProduct);
 save();
 
@@ -186,18 +186,34 @@ function render(){
  bind();
 }
 function head(title,sub="",button=""){return `<div class="page-head"><div><div class="crumb">COSTA / ${esc(title)}</div><h1>${esc(title)}</h1>${sub?`<div class="sub">${esc(sub)}</div>`:""}</div>${button}</div>`}
+function costStructure(p,c){
+ const rows=[
+  {name:"Materiales / insumos",amount:c.materials,cls:"mat"},
+  {name:"Mano de obra",amount:c.labor,cls:"labor"},
+  {name:"Indirectos",amount:c.tools+c.services+c.transport+c.packaging+c.fixedAllocated+c.marketingAllocated,cls:"indirect"},
+  {name:"Merma",amount:c.waste,cls:"waste"}
+ ].filter(x=>x.amount>0);
+ const total=rows.reduce((s,x)=>s+x.amount,0)||1;
+ return rows.map(x=>({...x,pct:x.amount/total*100}));
+}
+function costStructureUI(p,c){
+ const rows=costStructure(p,c), stops=[];let acc=0;
+ rows.forEach(x=>{stops.push(`${x.cls==='mat'?'#0b9b73':x.cls==='labor'?'#2686e6':x.cls==='indirect'?'#e2a51b':'#ef6d3a'} ${acc.toFixed(2)}% ${(acc+=x.pct).toFixed(2)}%`)});
+ const gradient=stops.length?stops.join(", "):"#dfe6ea 0 100%";
+ return `<div class="cost-structure"><div class="donut real" style="--donut:${gradient}"><div><b>${money(c.total)}</b><span>Costo total</span></div></div><div class="cost-legend">${rows.map(x=>`<div class="cost-legend-row"><span class="legend-dot ${x.cls}"></span><div><b>${esc(x.name)}</b><small>${money(x.amount)} · ${x.pct.toFixed(1)}%</small></div></div>`).join("")||`<div class="empty">Sin costos registrados.</div>`}</div></div>`;
+}
 function dashboard(){
  const p=db.products.find(x=>x.id===currentProductId)||db.products[0]; if(!p)return head("Inicio")+`<div class="card empty">Agrega tu primer producto.</div>`;
  const c=productCosts(p), sp=suggestedPrice(p), be=breakEven(p,sp);
  return head("Inicio","Vista general de tus costos, precios y rentabilidad.",`<button class="btn primary" data-action="new-product">＋ Nuevo producto</button>`)+
- `<div class="card section-card hero-product"><div class="pizza-art"></div><div style="flex:1"><h2>${esc(p.name)} <button class="btn small" data-action="edit-product" data-id="${p.id}">✎</button></h2><p>${esc(p.description||"")}</p><span class="tag">${esc(p.category||"Producto")}</span> <span class="tag gray">${esc(p.unit||"unidad")}</span><span class="tag gray">${num(p.timeValue??p.timeMin)} ${esc(p.timeUnit||"min")}</span></div></div>
+ `<div class="card section-card hero-product"><div class="product-art"></div><div style="flex:1"><h2>${esc(p.name)} <button class="btn small" data-action="edit-product" data-id="${p.id}">✎</button></h2><p>${esc(p.description||"")}</p><span class="tag">${esc(p.category||"Producto")}</span> <span class="tag gray">${esc(p.unit||"unidad")}</span><span class="tag gray">${num(p.timeValue??p.timeMin)} ${esc(p.timeUnit||"min")}</span></div></div>
  <div class="tabs"><button class="tab active">▣ Resumen</button><button class="tab" data-action="product-tab" data-id="${p.id}" data-tab="ingredients">◇ Ingredientes</button><button class="tab" data-action="product-tab" data-id="${p.id}" data-tab="indirect">⚙ Costos indirectos</button><button class="tab" data-action="product-tab" data-id="${p.id}" data-tab="price">▥ Precio y ganancia</button><button class="tab" data-action="go-sim" data-id="${p.id}">▦ Simulador</button></div>
  <div class="cards"><div class="card metric"><div class="label">Costo total por unidad</div><div class="value">${money(c.total)}</div><div class="progress"><i style="width:${Math.min(100,c.direct/c.total*100)}%"></i></div><div class="hint">Variables ${money(c.variable)} · ${p.overheadMode==="full"?"Fijos asignados "+money(c.fixedAllocated/c.yieldQty):"Fijos no asignados"}</div></div>
  <div class="card metric good"><div class="label">Precio sugerido</div><div class="value">${money(sp)}</div><div class="hint">Ganancia estimada <b>${money(sp-c.total)}</b> por unidad · margen ${num(p.targetMargin).toFixed(1)}%</div><button class="btn primary" style="margin-top:10px" data-action="client-ticket" data-id="${p.id}">🎫 Generar ticket para cliente</button></div>
  <div class="card metric"><div class="label">Punto de equilibrio</div><div class="value">${Number.isFinite(be)?be+" u/mes":"—"}</div><div class="hint">Con tus costos actuales y precio sugerido.</div></div></div>
  <div class="grid2"><div class="card section-card"><div class="section-title"><h3>Ingredientes / Insumos</h3><button class="btn small" data-action="product-tab" data-id="${p.id}" data-tab="ingredients">Ver todo</button></div>${recipeTable(p,c)}</div>
  <div class="card section-card"><div class="section-title"><h3>Otros costos por unidad</h3><button class="btn small" data-action="product-tab" data-id="${p.id}" data-tab="indirect">Configurar</button></div>${indirectTable(c)}</div></div>
- <div class="grid3" style="margin-top:12px"><div class="card section-card"><div class="section-title"><h3>Estructura de costos</h3></div><div class="donut"></div><div class="axis"><span>Directos</span><span>Mano de obra</span><span>Indirectos</span></div></div>
+ <div class="grid3" style="margin-top:12px"><div class="card section-card"><div class="section-title"><h3>Estructura de costos</h3><small>Distribución real</small></div>${costStructureUI(p,c)}</div>
  <div class="card section-card"><div class="section-title"><h3>Simulador de precio</h3></div><div class="field"><label>Ganancia deseada</label><div class="range-row"><input id="dashMargin" type="range" min="0" max="80" value="${num(p.targetMargin)}"><span class="range-val" id="dashMarginVal">${num(p.targetMargin).toFixed(0)}%</span></div></div><div class="alert success" id="dashPrice">Precio sugerido <b>${money(sp)}</b></div><button class="btn primary" data-action="go-sim">Calcular completo</button></div>
  <div class="card section-card"><div class="section-title"><h3>Proyección mensual</h3></div><div class="form-grid"><label class="field">Precio de venta<input id="dashSale" type="number" value="${Math.round(sp)}"></label><label class="field">Ventas diarias<input id="dashUnits" type="number" value="10"></label><label class="field">Días al mes<input id="dashDays" type="number" value="26"></label></div><div class="kpi-row" style="margin-top:10px"><div class="mini-kpi"><b id="dashRevenue">${money(sp*260)}</b><span>Ventas</span></div><div class="mini-kpi"><b id="dashProfit">${money((sp-c.total)*260)}</b><span>Utilidad estimada</span></div></div></div></div>`;
 }
@@ -233,11 +249,11 @@ function indirectTable(c){
 
 function products(){
  return head("Productos","Crea cualquier producto: comida, artesanía, servicio, reparación, etc.",`<button class="btn primary" data-action="new-product">＋ Nuevo producto</button>`) +
- `<div class="list-cards">${db.products.map(p=>{const c=productCosts(p),sp=suggestedPrice(p);return `<div class="card product-card"><div class="pc-top"><div><h3>${esc(p.name)}</h3><p>${esc(p.description||"")}</p></div><span class="tag">${esc(p.category||"General")}</span></div><div class="kpi-row"><div class="mini-kpi"><b>${money(c.total)}</b><span>Costo real</span></div><div class="mini-kpi"><b>${money(sp)}</b><span>Sugerido</span></div></div><div class="price-row" style="margin-top:12px"><div><span class="muted" style="font-size:9px">Margen objetivo</span><div class="big">${num(p.targetMargin).toFixed(1)}%</div></div><div class="actions"><button class="btn small" data-action="client-ticket" data-id="${p.id}">🎫 Ticket</button><button class="btn small" data-action="edit-product" data-id="${p.id}">Editar</button><button class="btn small danger" data-action="delete-product" data-id="${p.id}">Eliminar</button></div></div></div>`}).join("")}</div>`;
+ `<div class="list-cards">${db.products.map(p=>{const c=productCosts(p),sp=suggestedPrice(p);return `<div class="card product-card" data-action="view-product" data-id="${p.id}" tabindex="0" role="button" title="Tocar para ver el producto"><div class="pc-top"><div><h3>${esc(p.name)}</h3><p>${esc(p.description||"")}</p></div><span class="tag">${esc(p.category||"General")}</span></div><div class="kpi-row"><div class="mini-kpi"><b>${money(c.total)}</b><span>Costo real</span></div><div class="mini-kpi"><b>${money(sp)}</b><span>Sugerido</span></div></div><div class="price-row" style="margin-top:12px"><div><span class="muted" style="font-size:9px">Margen objetivo</span><div class="big">${num(p.targetMargin).toFixed(1)}%</div></div><div class="actions"><button class="btn small" data-action="client-ticket" data-id="${p.id}">🎫 Ticket</button><button class="btn small" data-action="edit-product" data-id="${p.id}">Editar</button><button class="btn small danger" data-action="delete-product" data-id="${p.id}">Eliminar</button></div></div></div>`}).join("")}</div>`;
 }
 
 const resourceMeta={
-ingredients:{title:"Ingredientes / Insumos",fields:[["name","Nombre","text"],["unit","Unidad","text"],["packQty","Cantidad del paquete","number"],["packPrice","Precio del paquete","number"]],desc:"Registra materiales o insumos y COSTA calculará su costo por unidad."},
+ingredients:{title:"Ingredientes / Insumos",fields:[["name","Nombre","text"],["unit","Unidad","select"],["packQty","Cantidad del paquete","number"],["packPrice","Precio del paquete","number"],["productType","Tipo de producto","select"]],desc:"Registra materiales o insumos y asígnalos al tipo de producto donde se utilizan."},
 equipment:{title:"Equipos y herramientas",fields:[["name","Nombre","text"],["purchase","Precio de compra","number"],["lifeMonths","Vida útil (meses)","number"],["residual","Valor residual","number"]],desc:"El costo de tus equipos se distribuye según su vida útil."},
 services:{title:"Servicios",fields:[["name","Servicio","text"],["monthly","Costo mensual","number"],["businessPct","% usado por el negocio","number"]],desc:"Luz, gas, agua, internet y otros servicios."},
 transport:{title:"Transporte",fields:[["name","Concepto","text"],["costPerKm","Costo por km","number"]],desc:"Calcula entregas y traslados con un costo por kilómetro."},
@@ -247,8 +263,8 @@ fixed:{title:"Gastos fijos",fields:[["name","Concepto","text"],["monthly","Costo
 marketing:{title:"Marketing y ventas",fields:[["name","Concepto","text"],["monthly","Costo mensual","number"]],desc:"Publicidad, impresos, plataformas y otros costos comerciales."}
 };
 function resources(type,title){
- const meta=resourceMeta[type], arr=db[type];
- const rows=arr.map(x=>{let unit="";if(type==="ingredients")unit=`${money(ingCost(x))}/${x.unit}`;if(type==="equipment")unit=money((num(x.purchase)-num(x.residual))/Math.max(1,num(x.lifeMonths)))+"/mes";if(type==="services"||type==="fixed")unit=money(num(x.monthly)*num(x.businessPct)/100)+"/mes";if(type==="transport")unit=money(x.costPerKm)+"/km";if(type==="labor")unit=money(x.hourRate)+"/h";if(type==="packaging")unit=money(x.unitPrice)+"/u";if(type==="marketing")unit=money(x.monthly)+"/mes";return `<tr><td><b>${esc(x.name)}</b></td><td>${unit}</td><td>${type==="ingredients"?`Compra: ${money(x.packPrice)} / ${x.packQty} ${x.unit}`:type==="equipment"?`Vida: ${x.lifeMonths} meses`:type==="services"||type==="fixed"?`${x.businessPct}% asignado`:type==="transport"?"":type==="labor"?"":""}</td><td class="money"><button class="btn small" data-action="edit-resource" data-type="${type}" data-id="${x.id}">Editar</button> <button class="btn small danger" data-action="delete-resource" data-type="${type}" data-id="${x.id}">Eliminar</button></td></tr>`}).join("");
+ const meta=resourceMeta[type], arr=db[type]||[];
+ const rows=arr.map(x=>{let unit="";if(type==="ingredients")unit=`${money(ingCost(x))}/${x.unit}`;if(type==="equipment")unit=money((num(x.purchase)-num(x.residual))/Math.max(1,num(x.lifeMonths)))+"/mes";if(type==="services"||type==="fixed")unit=money(num(x.monthly)*num(x.businessPct)/100)+"/mes";if(type==="transport")unit=money(x.costPerKm)+"/km";if(type==="labor")unit=money(x.hourRate)+"/h";if(type==="packaging")unit=money(x.unitPrice)+"/u";if(type==="marketing")unit=money(x.monthly)+"/mes";return `<tr><td><b>${esc(x.name)}</b></td><td>${unit}</td><td>${type==="ingredients"?`${esc(x.productType||"Todos")}`:type==="equipment"?`Vida: ${x.lifeMonths} meses`:type==="services"||type==="fixed"?`${x.businessPct}% asignado`:""}</td><td class="money"><button class="btn small" data-action="edit-resource" data-type="${type}" data-id="${x.id}">Editar</button> <button class="btn small danger" data-action="delete-resource" data-type="${type}" data-id="${x.id}">Eliminar</button></td></tr>`}).join("");
  return head(title,meta.desc,`<button class="btn primary" data-action="new-resource" data-type="${type}">＋ Agregar</button>`)+
  `<div class="card section-card"><div class="table-wrap"><table class="table"><thead><tr><th>Nombre</th><th>Costo calculado</th><th>Referencia</th><th></th></tr></thead><tbody>${rows||`<tr><td colspan="4"><div class="empty">Aún no hay registros.</div></td></tr>`}</tbody></table></div></div>`;
 }
@@ -268,7 +284,12 @@ function liveProductCalc(){
 }
 
 function syncRecipeUnit(changed){
- if(changed?.id==="pCategory"||changed?.id==="pUnit")return;
+ if(changed?.id==="pCategory"){
+   const category=changed.value==="Otro"?document.getElementById("pCategoryCustom")?.value:changed.value;
+   document.querySelectorAll(".recipe-row .r-ref").forEach(sel=>{const current=sel.value;sel.innerHTML=ingredientOptionsForProduct(category,current);if([...sel.options].some(o=>o.value===current))sel.value=current;});
+   return;
+ }
+ if(changed?.id==="pUnit")return;
  if(changed?.classList?.contains("r-ref")){
    const row=changed.closest(".recipe-row"), ing=db.ingredients.find(x=>x.id===changed.value);
    const unit=row?.querySelector(".r-unit");
@@ -304,6 +325,9 @@ function renderProductImagePreview(data){
 function bindModal(){
  document.querySelectorAll("#modalRoot [data-action]").forEach(x=>{if(!x._costaBound){x.onclick=()=>action(x.dataset.action,x);x._costaBound=true}});
  document.querySelectorAll("#modalRoot input,#modalRoot select,#modalRoot textarea").forEach(x=>{if(!x._costaInputBound){x.addEventListener("input",()=>{toggleCustomProductFields();liveProductCalc()});x.addEventListener("change",()=>{toggleCustomProductFields();syncRecipeUnit(x);liveProductCalc()});x._costaInputBound=true}});
+ const businessLogo=document.getElementById("businessLogo");
+ if(businessLogo&&!businessLogo._costaImageBound){businessLogo.addEventListener("change",async()=>{const file=businessLogo.files?.[0];if(!file)return;try{const data=await optimizeProductImage(file,700);businessLogo.dataset.imageData=data;const box=document.getElementById("businessLogoPreview");if(box)box.innerHTML=`<img src="${data}" alt="Logo"><button class="btn small danger" data-action="remove-business-logo">Eliminar</button>`;bindModal();toast("Logo preparado")}catch(e){alert("No se pudo cargar el logo.")}});businessLogo._costaImageBound=true;}
+ document.querySelectorAll("#modalRoot #ticketPrice,#modalRoot #ticketQty,#modalRoot #ticketPresentation,#modalRoot #ticketOccasion,#modalRoot #ticketFeatures,#modalRoot #ticketAdditional").forEach(x=>{if(!x._ticketBound){x.addEventListener("input",()=>{const id=document.querySelector('#modalRoot [data-action="ticket-refresh"]')?.dataset.id;if(id)updateTicketPreview(id)});x._ticketBound=true}});
  const imageInput=document.getElementById("pImage");
  if(imageInput&&!imageInput._costaImageBound){
   imageInput.addEventListener("change",async()=>{
@@ -314,6 +338,19 @@ function bindModal(){
   imageInput._costaImageBound=true;
  }
  toggleCustomProductFields();
+}
+function productDetailModal(id){
+ const p=db.products.find(x=>x.id===id);if(!p)return;const c=productCosts(p),sp=suggestedPrice(p),s=costStructure(p,c);
+ modal(`<div class="modal-backdrop"><div class="modal product-detail-modal"><div class="modal-head"><div><h2>${esc(p.name)}</h2><small>${esc(p.category||"Producto")} · ${esc(p.unit||"unidad")}</small></div><button class="close" data-action="close-modal">×</button></div><div class="modal-body"><div class="product-detail-hero">${p.image?`<img src="${p.image}" alt="${esc(p.name)}">`:`<div class="detail-placeholder">COSTA</div>`}<div><span class="tag">${esc(p.category||"Producto")}</span><p>${esc(p.description||"Sin descripción.")}</p><div class="kpi-row"><div class="mini-kpi"><b>${money(c.total)}</b><span>Costo real</span></div><div class="mini-kpi"><b>${money(sp)}</b><span>Precio sugerido</span></div></div></div></div><div class="cost-legend detail-legend">${s.map(x=>`<div class="cost-legend-row"><span class="legend-dot ${x.cls}"></span><div><b>${esc(x.name)}</b><small>${money(x.amount)} · ${x.pct.toFixed(1)}%</small></div></div>`).join("")}</div></div><div class="modal-foot"><button class="btn" data-action="close-modal">Cerrar</button><button class="btn primary" data-action="edit-product" data-id="${id}">Editar</button></div></div></div>`);
+}
+function productSectionModal(id,tab){
+ const p=db.products.find(x=>x.id===id);if(!p)return;const c=productCosts(p),sp=suggestedPrice(p);
+ let title="",body="";
+ if(tab==="ingredients"){title="Ingredientes / materiales";body=recipeTable(p,c)}
+ else if(tab==="indirect"){title="Costos indirectos";body=indirectTable(c)}
+ else if(tab==="price"){title="Precio y ganancia";body=`<div class="cards"><div class="card metric"><div class="label">Costo por unidad</div><div class="value">${money(c.total)}</div></div><div class="card metric good"><div class="label">Precio sugerido</div><div class="value">${money(sp)}</div></div><div class="card metric"><div class="label">Ganancia estimada</div><div class="value">${money(sp-c.total)}</div><div class="hint">Margen objetivo ${num(p.targetMargin).toFixed(1)}%</div></div></div><div class="alert success">El precio sugerido se calcula con el costo real y el margen objetivo configurado para este producto.</div>`}
+ else return;
+ modal(`<div class="modal-backdrop"><div class="modal"><div class="modal-head"><h2>${title}</h2><button class="close" data-action="close-modal">×</button></div><div class="modal-body">${body}</div><div class="modal-foot"><button class="btn" data-action="close-modal">Cerrar</button><button class="btn primary" data-action="edit-product" data-id="${id}">Editar producto</button></div></div></div>`);
 }
 function simulator(){
  const p=db.products.find(x=>x.id===currentProductId)||db.products[0]; if(!p)return head("Simulador")+"<div class='card empty'>Primero crea un producto.</div>";
@@ -329,10 +366,17 @@ function reports(){
  <div class="card section-card"><div class="section-title"><h3>Tabla de precios</h3><button class="btn small" data-action="print-report">Imprimir</button></div><div class="table-wrap"><table class="table"><thead><tr><th>Producto</th><th>Costo real</th><th>Precio sugerido</th><th>Ganancia</th><th>Margen</th><th>Punto equilibrio</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
 function settings(){
- return head("Configuración","Todo se guarda en este dispositivo. No usamos Firebase ni servidor.",`<button class="btn primary" data-action="save-settings">Guardar cambios</button>`)+
- `<div class="grid2"><div class="card section-card"><div class="section-title"><h3>Negocio</h3></div><div class="form-grid"><label class="field">Nombre<input id="setName" value="${esc(db.business.name)}"></label><label class="field">Tipo de negocio<input id="setType" value="${esc(db.business.type)}"></label><label class="field">Moneda<select id="setCurrency"><option value="MXN" ${db.business.currency==="MXN"?"selected":""}>MXN — Peso mexicano</option><option value="USD" ${db.business.currency==="USD"?"selected":""}>USD — Dólar</option></select></label></div></div>
- <div class="card section-card"><div class="section-title"><h3>Datos</h3></div><p class="sub">Tus datos permanecen en el navegador mediante LocalStorage.</p><div class="actions" style="margin-top:12px"><button class="btn" data-action="export-json">⇩ Exportar respaldo</button><button class="btn" data-action="import-json">⇧ Importar respaldo</button><button class="btn danger" data-action="clear-data">Restablecer todo</button></div><div class="alert">Consejo: exporta un respaldo antes de cambiar de teléfono o borrar los datos del navegador.</div></div></div>`;
+ const b=db.business||seed.business;
+ return head("Configuración","Tu perfil y todos tus datos se guardan localmente en este dispositivo.",`<button class="btn primary" data-action="save-settings">Guardar cambios</button>`)+
+ `<div class="grid2"><div class="card section-card"><div class="section-title"><h3>👤 Perfil del negocio</h3><small>Aparece en tus tickets</small></div><div class="form-grid">
+ <label class="field">Nombre del negocio<input id="setName" value="${esc(b.name)}"></label><label class="field">Tipo de negocio<input id="setType" value="${esc(b.type)}"></label>
+ <label class="field">Teléfono<input id="setPhone" value="${esc(b.phone)}" placeholder="Ej. 937 000 0000"></label><label class="field">WhatsApp<input id="setWhatsapp" value="${esc(b.whatsapp)}" placeholder="Ej. 937 000 0000"></label>
+ <label class="field full">Dirección<input id="setAddress" value="${esc(b.address)}" placeholder="Calle, número, colonia..."></label><label class="field">Localidad / ciudad<input id="setCity" value="${esc(b.city)}"></label><label class="field">Correo electrónico<input id="setEmail" type="email" value="${esc(b.email)}"></label>
+ <label class="field full">Frase del negocio<input id="setTagline" value="${esc(b.tagline)}" placeholder="Calidad en cada detalle"></label><label class="field full">Mensaje de despedida<input id="setTicketMessage" value="${esc(b.ticketMessage)}" placeholder="Gracias por tu preferencia."></label>
+ </div><div class="business-logo-box"><div><b>Logo</b><small>Se guarda dentro de COSTA y funciona sin internet.</small></div><input id="businessLogo" type="file" accept="image/*" style="display:none"><div id="businessLogoPreview">${b.logo?`<img src="${b.logo}" alt="Logo"><button class="btn small danger" data-action="remove-business-logo">Eliminar</button>`:`<div class="image-placeholder">Aún no has agregado un logo.</div>`}</div><button class="btn" data-action="choose-business-logo">📷 Cargar logo</button></div></div>
+ <div class="card section-card"><div class="section-title"><h3>💾 Datos</h3></div><p class="sub">COSTA es 100% offline. No usamos Firebase ni servidor para guardar estos datos.</p><label class="field" style="margin-top:12px">Moneda<select id="setCurrency"><option value="MXN" ${b.currency==="MXN"?"selected":""}>MXN — Peso mexicano</option><option value="USD" ${b.currency==="USD"?"selected":""}>USD — Dólar</option></select></label><div class="actions" style="margin-top:14px"><button class="btn" data-action="export-json">⇩ Exportar respaldo</button><button class="btn" data-action="import-json">⇧ Importar respaldo</button><button class="btn danger" data-action="clear-data">Restablecer todo</button></div><div class="alert success">El perfil, productos, ingredientes y configuraciones se conservan en este dispositivo.</div></div></div>`;
 }
+
 
 function productModal(id){
  const p=id?normalizeProduct(db.products.find(x=>x.id===id)):normalizeProduct({id:"",name:"",description:"",category:"Otro",unit:"unidad",batchQty:1,timeValue:20,timeUnit:"min",targetMargin:40,monthlyUnits:1,overheadMode:"direct",mermaPct:5,transportKm:0,recipe:[],tools:[],services:[],packaging:[],image:"",laborRef:db.labor[0]?.id||"",laborValue:20,laborUnit:"min"});
@@ -387,9 +431,13 @@ function productModal(id){
  <hr class="hr"><div class="calc-box" id="liveProductCalc">Calculando...</div>
  </div><div class="modal-foot"><button class="btn" data-action="close-modal">Cancelar</button><button class="btn primary" data-action="save-product" data-id="${id||""}">Guardar producto</button></div></div></div>`;
 }
+function ingredientOptionsForProduct(category,selected=""){
+ const list=db.ingredients.filter(x=>(x.productType||"Todos")==="Todos" || !category || (x.productType||"")===category || x.id===selected);
+ return list.map(x=>`<option value="${x.id}" ${x.id===selected?"selected":""}>${esc(x.name)}${x.productType&&x.productType!=="Todos"?` · ${esc(x.productType)}`:""}</option>`).join("");
+}
 function recipeEditor(p){
  return (p.recipe||[]).map(r=>`<div class="resource-row recipe-row">
- <label class="field">Insumo<select class="r-ref">${db.ingredients.map(x=>`<option value="${x.id}" ${x.id===r.ref?"selected":""}>${esc(x.name)}</option>`).join("")}</select></label>
+ <label class="field">Insumo<select class="r-ref">${ingredientOptionsForProduct(p.category,r.ref)}</select></label>
  <label class="field">Cantidad<input class="r-qty" type="number" step=".0001" value="${r.qty}"></label>
  <label class="field">Unidad<select class="r-unit">${unitOptions(r.unit||db.ingredients.find(x=>x.id===r.ref)?.unit||"unidad")}</select></label>
  <button class="remove-row" data-action="remove-row">×</button></div>`).join("")||`<div class="empty">Agrega los materiales que utiliza el producto.</div>`;
@@ -439,63 +487,61 @@ function allocationOptions(selected="monthlyUnits"){
 
 function resourceModal(type,id){
  const meta=resourceMeta[type], x=id?db[type].find(y=>y.id===id):{};
- const fields=meta.fields.map(([key,label,t])=>`<label class="field">${label}<input id="r_${key}" type="${t}" value="${esc(x[key]??"")}"></label>`).join("");
- return `<div class="modal-backdrop"><div class="modal"><div class="modal-head"><h2>${id?"Editar":"Agregar"} ${meta.title}</h2><button class="close" data-action="close-modal">×</button></div><div class="modal-body"><div class="form-grid">${fields}</div></div><div class="modal-foot"><button class="btn" data-action="close-modal">Cancelar</button><button class="btn primary" data-action="save-resource" data-type="${type}" data-id="${id||""}">Guardar</button></div></div></div>`;
+ const fields=meta.fields.map(([key,label,t])=>{
+   if(type==="ingredients"&&key==="unit")return `<label class="field">${label}<select id="r_${key}">${unitOptions(x[key]||"kg")}</select></label>`;
+   if(type==="ingredients"&&key==="productType")return `<label class="field">${label}<select id="r_${key}">${selectOptions(["Todos",...PRODUCT_CATEGORIES],x[key]||"Todos")}</select></label>`;
+   return `<label class="field">${label}<input id="r_${key}" type="${t}" value="${esc(x[key]??"")}"></label>`;
+ }).join("");
+ return `<div class="modal-backdrop"><div class="modal"><div class="modal-head"><h2>${id?"Editar":"Agregar"} ${meta.title}</h2><button class="close" data-action="close-modal">×</button></div><div class="modal-body"><div class="form-grid">${fields}</div>${type==="ingredients"?`<div class="note" style="margin-top:10px">Los ingredientes quedan asociados a un tipo de producto. Los productos de ese tipo los mostrarán automáticamente al armar su receta.</div>`:""}</div><div class="modal-foot"><button class="btn" data-action="close-modal">Cancelar</button><button class="btn primary" data-action="save-resource" data-type="${type}" data-id="${id||""}">Guardar</button></div></div></div>`;
 }
 
 function ticketText(v){return String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;")}
-function wrapSvgText(text,maxChars=30){
- const words=String(text||"").trim().split(/\s+/); const lines=[]; let line="";
- words.forEach(w=>{if((line+" "+w).trim().length>maxChars){if(line)lines.push(line);line=w}else line=(line+" "+w).trim()});
- if(line)lines.push(line); return lines.slice(0,4);
+function wrapSvgText(text,maxChars=52,maxLines=5){
+ const words=String(text||"").trim().split(/\s+/).filter(Boolean),lines=[];let line="";
+ words.forEach(w=>{const next=(line+" "+w).trim();if(next.length>maxChars){if(line)lines.push(line);line=w}else line=next});if(line)lines.push(line);return lines.slice(0,maxLines);
 }
-function ticketSvg(p,price,clientNote){
- const biz=db.business?.name?.trim()||"Tu Negocio";
- const desc=clientNote?.trim()||p.description?.trim()||"Producto elaborado con cuidado y atención a cada detalle.";
- const descLines=wrapSvgText(desc,42);
- const detail=[];
- if(p.unit)detail.push(["Presentación",p.unit]);
- if(p.category && p.category!=="Otro")detail.push(["Categoría",p.category]);
- if(num(p.timeValue)>0)detail.push(["Tiempo de elaboración",`${p.timeValue} ${p.timeUnit||"min"}`]);
- const safeBiz=ticketText(biz), safeName=ticketText(p.name||"Producto");
- const safeDesc=descLines.map(ticketText);
- const imageSvg=p.image?`<rect x="78" y="535" width="318" height="330" rx="26" fill="#f5efe7"/><image href="${p.image}" x="88" y="545" width="298" height="310" preserveAspectRatio="xMidYMid slice" clip-path="inset(0 round 20px)"/>`:
- `<rect x="78" y="535" width="318" height="330" rx="26" fill="#f5efe7"/><text x="237" y="700" text-anchor="middle" class="placeholder">Tu producto</text>`;
- const detailSvg=detail.slice(0,3).map((d,i)=>`<g transform="translate(450 ${560+i*88})"><circle cx="20" cy="20" r="20" fill="#f3e9de"/><text x="20" y="27" text-anchor="middle" class="icon">${i===0?'◆':i===1?'✦':'◷'}</text><text x="58" y="15" class="detailLabel">${ticketText(d[0])}</text><text x="58" y="43" class="detailValue">${ticketText(d[1])}</text></g>`).join("");
- const descSvg=safeDesc.map((x,i)=>`<text x="450" y="500" class="desc">${x}</text>`).join("");
- return `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1260" viewBox="0 0 900 1260">
- <defs>
-  <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fffdf9"/><stop offset="1" stop-color="#fbf5ec"/></linearGradient>
-  <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#5b4636" flood-opacity=".18"/></filter>
- </defs>
- <rect width="900" height="1260" fill="#eee9e2"/>
- <rect x="48" y="34" width="804" height="1185" rx="34" fill="url(#paper)" filter="url(#shadow)"/>
- <text x="82" y="115" class="logo">COSTA</text><text x="82" y="151" class="tagline">Tus ideas, bien calculadas</text>
- <line x1="560" y1="78" x2="560" y2="164" stroke="#9b8877" stroke-width="2"/>
- <text x="595" y="103" class="hand">Ideas que</text><text x="595" y="137" class="hand">toman forma</text><path d="M595 151 Q660 175 730 148" fill="none" stroke="#9b8877" stroke-width="3"/><text x="760" y="145" class="heart">♡</text>
- <rect x="78" y="195" width="744" height="72" rx="18" fill="#f5eee5"/>
- <text x="450" y="226" text-anchor="middle" class="section">COTIZACIÓN DE PRODUCTO</text>
- <text x="450" y="251" text-anchor="middle" class="subsection">GRACIAS POR CONFIAR EN NUESTRO TRABAJO</text>
- ${imageSvg}
- <text x="450" y="335" class="productLabel">${safeName}</text>
- <path d="M450 355 Q510 370 575 352" fill="none" stroke="#c98f91" stroke-width="5"/>
- <text x="450" y="405" class="desc">${safeDesc[0]||""}</text>
- ${safeDesc.slice(1).map((x,i)=>`<text x="450" y="${439+i*34}" class="desc">${x}</text>`).join("")}
- <text x="78" y="910" class="priceLabel">Precio</text>
- <rect x="475" y="858" width="347" height="94" rx="22" fill="#f5ddd7"/>
- <text x="648" y="923" text-anchor="middle" class="price">${ticketText(money(price))}</text>
- ${detailSvg}
- <line x1="78" y1="985" x2="822" y2="985" stroke="#d9cec2" stroke-width="2"/>
- <text x="450" y="1037" text-anchor="middle" class="thanks">¡Gracias por apoyar el talento local!</text>
- <text x="450" y="1080" text-anchor="middle" class="quote">“Las ideas también pueden ser color, alegría y esperanza”</text>
- <g transform="translate(110 1122)"><path d="M0 38 C15 2 42 4 54 0 C50 24 34 43 5 45" fill="#aab9a8"/><path d="M48 43 C64 13 89 15 104 13 C94 37 75 50 49 50" fill="#8fa48f"/></g>
- <g transform="translate(680 1122)"><path d="M0 38 C15 2 42 4 54 0 C50 24 34 43 5 45" fill="#aab9a8"/><path d="M48 43 C64 13 89 15 104 13 C94 37 75 50 49 50" fill="#8fa48f"/></g>
- <text x="450" y="1138" text-anchor="middle" class="mini">Hecho con dedicación  ·  Calidad en cada detalle  ·  Tu confianza nos inspira</text>
- <line x1="300" y1="1172" x2="405" y2="1172" stroke="#b9aa9c"/><text x="450" y="1178" text-anchor="middle" class="footer">C O S T A</text><line x1="495" y1="1172" x2="600" y2="1172" stroke="#b9aa9c"/>
- <style>
- .logo{font:800 72px Arial,sans-serif;fill:#4a2d20;letter-spacing:-2px}.tagline{font:400 25px Arial,sans-serif;fill:#9a8777}.hand{font:italic 31px cursive;fill:#4a382f}.heart{font:600 42px Arial,sans-serif;fill:#4a382f}.section{font:800 22px Arial,sans-serif;fill:#4b3529;letter-spacing:6px}.subsection{font:400 16px Arial,sans-serif;fill:#a49486;letter-spacing:4px}.productLabel{font:800 51px Arial,sans-serif;fill:#3e291f}.desc{font:400 24px Arial,sans-serif;fill:#55463d}.detailLabel{font:700 17px Arial,sans-serif;fill:#6e6259}.detailValue{font:400 22px Arial,sans-serif;fill:#51443b}.icon{font:700 18px Arial,sans-serif;fill:#765d4c}.priceLabel{font:800 23px Arial,sans-serif;fill:#4e3a2f;text-transform:uppercase}.price{font:800 53px Arial,sans-serif;fill:#4a2d20}.thanks{font:700 30px cursive;fill:#4a382f}.quote{font:italic 19px Arial,sans-serif;fill:#8a7768}.mini{font:400 17px Arial,sans-serif;fill:#65574d}.footer{font:700 16px Arial,sans-serif;fill:#705b4d;letter-spacing:5px}.placeholder{font:italic 25px Arial,sans-serif;fill:#a79a90}
- </style></svg>`
+function buildClientDescription(p,data={}){
+ const parts=[];const product=p.name?.trim()||"Producto";
+ const presentation=data.presentation?.trim()||p.unit?.trim();
+ const features=(data.features||"").split(/[,;\n]+/).map(x=>x.trim()).filter(Boolean);
+ const occasion=data.occasion?.trim();const extra=data.additional?.trim();
+ let first=`${product}`;if(presentation)first+=` en presentación de ${presentation}`;first+=`.`;parts.push(first);
+ if(features.length)parts.push(`Características: ${features.join(", ")}.`);
+ if(occasion)parts.push(`Ideal para ${occasion}.`);
+ if(extra)parts.push(extra.endsWith(".")?extra:extra+".");
+ return parts.join(" ");
 }
+function ticketSvg(p,price,data={}){
+ const b=db.business||{};const biz=b.name?.trim()||"Mi Negocio";const desc=buildClientDescription(p,data);const message=data.message?.trim()||b.ticketMessage?.trim()||"Gracias por considerar nuestro producto.";
+ const qty=Math.max(1,num(data.quantity)||1), total=price*qty;
+ const detail=[ ["Presentación",data.presentation?.trim()||p.unit||"unidad"], ["Categoría",p.category||"Producto"], ["Tiempo",num(p.timeValue)>0?`${p.timeValue} ${p.timeUnit||"min"}`:"A definir"] ];
+ const safeNameLines=wrapSvgText(p.name||"Producto",30,1),safeName=safeNameLines.map(ticketText),safeBiz=ticketText(wrapSvgText(biz,25,1)[0]||"Mi Negocio"),safeDesc=wrapSvgText(desc,60,6),safeMsg=wrapSvgText(message,62,4),contactLines=wrapSvgText(contact.join(" · "),68,2);
+ const contact=[b.phone&&`Tel. ${b.phone}`,b.whatsapp&&`WhatsApp ${b.whatsapp}`,b.email&&b.email,b.address&&b.address,b.city&&b.city].filter(Boolean);
+ const logo=b.logo?`<image href="${ticketText(b.logo)}" x="82" y="66" width="90" height="90" preserveAspectRatio="xMidYMid meet"/>`:`<circle cx="127" cy="111" r="45" fill="#0f5d4d"/><text x="127" y="123" text-anchor="middle" class="logoMark">C</text>`;
+ const descSvg=safeDesc.map((x,i)=>`<text x="94" y="710" class="bodyText">${ticketText(x)}</text>`).join("");
+ const descMore=safeDesc.slice(1).map((x,i)=>`<text x="94" y="${744+i*32}" class="bodyText">${ticketText(x)}</text>`).join("");
+ const msgSvg=safeMsg.map((x,i)=>`<text x="94" y="1162" class="bodyText">${ticketText(x)}</text>`).join("");
+ const msgMore=safeMsg.slice(1).map((x,i)=>`<text x="94" y="${1194+i*30}" class="bodyText">${ticketText(x)}</text>`).join("");
+ const detailsSvg=detail.map((d,i)=>{const x=112+i*300;return `<g transform="translate(${x} 475)"><text x="0" y="0" class="detailLabel">${ticketText(d[0])}</text><text x="0" y="38" class="detailValue">${ticketText(d[1])}</text></g>`}).join("");
+ return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1500" viewBox="0 0 1080 1500"><defs><linearGradient id="paper" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fffdf8"/><stop offset="1" stop-color="#f2f7f1"/></linearGradient><filter id="shadow"><feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#183c34" flood-opacity=".18"/></filter></defs>
+ <rect width="1080" height="1500" fill="#eaf0ee"/><rect x="44" y="38" width="992" height="1420" rx="42" fill="url(#paper)" filter="url(#shadow)"/>
+ ${logo}<text x="205" y="100" class="brandName">${safeBiz}</text><text x="205" y="137" class="tagline">${ticketText(b.tagline||"Tus ideas, bien calculadas")}</text>
+ <text x="924" y="93" text-anchor="end" class="smallCap">COSTA</text><text x="924" y="126" text-anchor="end" class="smallText">Cotización</text><line x1="82" y1="180" x2="998" y2="180" stroke="#d6e2dd" stroke-width="2"/>
+ <rect x="82" y="214" width="916" height="94" rx="24" fill="#0f5d4d"/><text x="116" y="255" class="ticketTitle">COTIZACIÓN DE PRODUCTO</text><text x="116" y="285" class="ticketSub">Información preparada para tu cliente</text>
+ <text x="82" y="368" class="productName">${safeName[0]||"Producto"}</text><text x="82" y="404" class="category">${ticketText(p.category||"Producto")}</text>
+ <rect x="82" y="446" width="916" height="178" rx="28" fill="#f1f5ef"/>${detailsSvg}
+ <rect x="82" y="654" width="916" height="314" rx="28" fill="#fff" stroke="#dce7e1"/><text x="114" y="700" class="sectionTitle">Descripción</text>${descSvg}${descMore}
+ <rect x="82" y="994" width="916" height="128" rx="28" fill="#dff3ea"/><text x="114" y="1038" class="sectionTitle">Cotización</text><text x="114" y="1082" class="bodyText">Cantidad: ${qty}</text><text x="490" y="1082" class="bodyText">Precio unitario: ${ticketText(money(price))}</text><rect x="690" y="1014" width="280" height="88" rx="22" fill="#0f5d4d"/><text x="830" y="1050" text-anchor="middle" class="totalLabel">TOTAL</text><text x="830" y="1085" text-anchor="middle" class="total">${ticketText(money(total))}</text>
+ <rect x="82" y="1148" width="916" height="142" rx="28" fill="#f7f1e7"/><text x="114" y="1190" class="sectionTitle">Mensaje para el cliente</text>${msgSvg}${msgMore}
+ <line x1="82" y1="1326" x2="998" y2="1326" stroke="#d6e2dd" stroke-width="2"/><text x="540" y="1366" text-anchor="middle" class="thanks">Gracias por tu preferencia</text>${contactLines.map((x,i)=>`<text x="540" y="${1394+i*22}" text-anchor="middle" class="contact">${ticketText(x)}</text>`).join("")}<text x="540" y="1433" text-anchor="middle" class="footer">COSTA · Tus ideas, bien calculadas</text>
+ <style>.brandName{font:800 42px Arial,sans-serif;fill:#123d34}.tagline{font:400 21px Arial,sans-serif;fill:#61756f}.logoMark{font:800 50px Arial,sans-serif;fill:#fff}.smallCap{font:800 18px Arial,sans-serif;letter-spacing:5px;fill:#0f5d4d}.smallText{font:400 18px Arial,sans-serif;fill:#70817c}.ticketTitle{font:800 27px Arial,sans-serif;fill:#fff;letter-spacing:2px}.ticketSub{font:400 18px Arial,sans-serif;fill:#d8eee7}.productName{font:800 46px Arial,sans-serif;fill:#143b33}.category{font:700 20px Arial,sans-serif;fill:#0f8a6c}.sectionTitle{font:800 25px Arial,sans-serif;fill:#173e35}.bodyText{font:400 21px Arial,sans-serif;fill:#465c55}.totalLabel{font:800 15px Arial,sans-serif;fill:#bde7d8;letter-spacing:2px}.total{font:800 34px Arial,sans-serif;fill:#fff}.thanks{font:700 28px Arial,sans-serif;fill:#173e35}.contact{font:400 17px Arial,sans-serif;fill:#667872}.footer{font:800 14px Arial,sans-serif;fill:#0f5d4d;letter-spacing:4px}.detailLabel{font:400 16px Arial,sans-serif;fill:#7a8a85}.detailValue{font:700 22px Arial,sans-serif;fill:#173e35}</style></svg>`;
+}
+async function clientTicketModal(id){
+ const p=db.products.find(x=>x.id===id); if(!p)return;const price=suggestedPrice(p);
+ modal(`<div class="modal-backdrop"><div class="modal ticket-modal"><div class="modal-head"><h2>🎫 Ticket para cliente</h2><button class="close" data-action="close-modal">×</button></div><div class="modal-body"><div class="alert success"><b>Solo información para tu cliente.</b> COSTA no muestra costos, margen, ganancia ni gastos internos.</div><div class="form-grid"><label class="field">Precio unitario<input id="ticketPrice" type="number" step=".01" min="0" value="${price.toFixed(2)}"></label><label class="field">Cantidad<input id="ticketQty" type="number" step="1" min="1" value="1"></label><label class="field">Presentación<input id="ticketPresentation" value="${esc(p.unit||"pieza")}" placeholder="Ej. 1 pieza, 500 g..."></label><label class="field">Ocasión / uso<input id="ticketOccasion" placeholder="Ej. cumpleaños, regalo..."></label><label class="field full">Características principales<input id="ticketFeatures" placeholder="Ej. artesanal, personalizado, acabado mate..."></label><label class="field full">Detalle adicional<textarea id="ticketAdditional" rows="3" placeholder="Información importante para el cliente"></textarea></label></div><div class="ticket-generated-note" id="ticketGeneratedNote"></div><div class="ticket-preview"><img id="ticketPreview" alt="Vista previa del ticket"></div><div class="actions ticket-actions"><button class="btn" data-action="ticket-refresh" data-id="${id}">↻ Actualizar</button><button class="btn" data-action="ticket-save" data-id="${id}">⬇ Guardar imagen</button><button class="btn primary" data-action="ticket-share" data-id="${id}">📤 Compartir imagen</button></div></div></div></div>`);updateTicketPreview(id);
+}
+function ticketDataFromForm(p){return {quantity:num(document.getElementById("ticketQty")?.value)||1,presentation:document.getElementById("ticketPresentation")?.value||p.unit||"pieza",occasion:document.getElementById("ticketOccasion")?.value||"",features:document.getElementById("ticketFeatures")?.value||"",additional:document.getElementById("ticketAdditional")?.value||"",message:db.business?.ticketMessage||""};}
+function updateTicketPreview(id){const p=db.products.find(x=>x.id===id);if(!p)return;const data=ticketDataFromForm(p),price=Math.max(0,num(document.getElementById("ticketPrice")?.value??suggestedPrice(p)));const img=document.getElementById("ticketPreview");if(img)img.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(ticketSvg(p,price,data));const note=document.getElementById("ticketGeneratedNote");if(note)note.innerHTML=`<b>Descripción generada:</b> ${esc(buildClientDescription(p,data))}`;}
 async function svgToPngBlob(svg,width=900,height=1100){
  const blob=new Blob([svg],{type:"image/svg+xml;charset=utf-8"});
  const url=URL.createObjectURL(blob);
@@ -507,34 +553,12 @@ async function svgToPngBlob(svg,width=900,height=1100){
    return await new Promise(resolve=>canvas.toBlob(resolve,"image/png",1));
  }finally{URL.revokeObjectURL(url)}
 }
-async function clientTicketModal(id){
- const p=db.products.find(x=>x.id===id); if(!p)return;
- const price=suggestedPrice(p);
- const note=(p.description||"").trim();
- const svg=ticketSvg(p,price,note);
- modal(`<div class="modal-backdrop" data-modal-bg><div class="modal ticket-modal">
-  <div class="modal-head"><h2>🎫 Ticket para cliente</h2><button class="close" data-action="close-modal">×</button></div>
-  <div class="modal-body">
-   <div class="alert success"><b>Solo información para tu cliente.</b> COSTA no muestra costos, margen, ganancia, herramientas, servicios ni gastos internos.</div>
-   <div class="form-grid"><label class="field">Precio que verá el cliente<input id="ticketPrice" type="number" step=".01" min="0" value="${price.toFixed(2)}"></label><label class="field">Mensaje / descripción<textarea id="ticketNote" rows="4">${esc(note)}</textarea></label></div>
-   <div class="ticket-preview"><img id="ticketPreview" alt="Vista previa del ticket"></div>
-   <div class="actions ticket-actions">
-    <button class="btn" data-action="ticket-refresh" data-id="${id}">↻ Actualizar</button>
-    <button class="btn" data-action="ticket-save" data-id="${id}">⬇ Guardar imagen</button>
-    <button class="btn primary" data-action="ticket-share" data-id="${id}">📤 Compartir imagen</button>
-   </div>
-  </div>
- </div></div>`);
- const img=document.getElementById("ticketPreview");
- const dataUrl="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(svg);
- img.src=dataUrl;
-}
 async function buildTicketFile(id){
  const p=db.products.find(x=>x.id===id); if(!p)throw Error("Producto no encontrado");
- const note=document.getElementById("ticketNote")?.value||p.description||"";
+ const data=ticketDataFromForm(p);
  const shownPrice=Math.max(0,num(document.getElementById("ticketPrice")?.value??suggestedPrice(p)));
- const svg=ticketSvg(p,shownPrice,note);
- const blob=await svgToPngBlob(svg);
+ const svg=ticketSvg(p,shownPrice,data);
+ const blob=await svgToPngBlob(svg,1080,1500);
  return {blob,name:`COSTA-${(p.name||"producto").replace(/[^\wáéíóúüñ -]/gi,"").trim().replace(/\s+/g,"-")||"producto"}.png`};
 }
 function modal(html){document.getElementById("modalRoot").innerHTML=html;bindModal?.();liveProductCalc?.()}
@@ -550,9 +574,11 @@ function action(a,b){
  if(a==="new-product")modal(productModal());
  if(a==="choose-product-image"){document.getElementById("pImage")?.click()}
  if(a==="remove-product-image"){const input=document.getElementById("pImage");if(input){input.value="";input.dataset.imageData="";renderProductImagePreview("")}}
+ if(a==="choose-business-logo"){document.getElementById("businessLogo")?.click()}
+ if(a==="remove-business-logo"){db.business.logo="";save();render();toast("Logo eliminado")}
  if(a==="edit-product"){currentProductId=id;modal(productModal(id));bindModal();liveProductCalc()}
  if(a==="client-ticket"){clientTicketModal(id)}
- if(a==="ticket-refresh"){const p=db.products.find(x=>x.id===id);if(p){const price=Math.max(0,num(document.getElementById("ticketPrice")?.value??suggestedPrice(p)));const note=document.getElementById("ticketNote")?.value||p.description||"";const img=document.getElementById("ticketPreview");if(img)img.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(ticketSvg(p,price,note));}}
+ if(a==="ticket-refresh"){updateTicketPreview(id)}
  if(a==="ticket-save"){(async()=>{try{const f=await buildTicketFile(id);const u=URL.createObjectURL(f.blob);const a=document.createElement("a");a.href=u;a.download=f.name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1500);toast("Imagen guardada")}catch(e){alert("No se pudo generar la imagen.")}})()}
  if(a==="ticket-share"){(async()=>{try{const f=await buildTicketFile(id);const file=new File([f.blob],f.name,{type:"image/png"});if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){await navigator.share({title:db.business?.name||"COSTA",text:`${db.products.find(x=>x.id===id)?.name||"Producto"} — ${money(num(document.getElementById("ticketPrice")?.value??suggestedPrice(db.products.find(x=>x.id===id))))}`,files:[file]})}else{const u=URL.createObjectURL(f.blob);const a=document.createElement("a");a.href=u;a.download=f.name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1500);toast("Tu navegador no permite compartir archivos; se guardó la imagen.")}}catch(e){if(e?.name!=="AbortError")alert("No se pudo compartir la imagen.")}})()}
  if(a==="delete-product"){if(confirm("¿Eliminar este producto?")){db.products=db.products.filter(x=>x.id!==id);if(currentProductId===id)currentProductId=db.products[0]?.id;save();render();toast("Producto eliminado")}}
@@ -562,7 +588,7 @@ function action(a,b){
  if(a==="close-modal")closeModal();
  if(a==="save-product")saveProduct(id);
  if(a==="save-resource")saveResource(type,id);
- if(a==="add-recipe-row"){document.getElementById("recipeEditor").insertAdjacentHTML("beforeend",`<div class="resource-row recipe-row"><label class="field">Insumo<select class="r-ref">${db.ingredients.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select></label><label class="field">Cantidad<input class="r-qty" type="number" step=".0001" value="1"></label><label class="field">Unidad<select class="r-unit">${unitOptions(db.ingredients[0]?.unit||"kg")}</select></label><button class="remove-row" data-action="remove-row">×</button></div>`);bindModal();liveProductCalc()}
+ if(a==="add-recipe-row"){const modalP={category:document.getElementById("pCategory")?.value==="Otro"?document.getElementById("pCategoryCustom")?.value:document.getElementById("pCategory")?.value};const list=db.ingredients.filter(x=>(x.productType||"Todos")==="Todos"||!modalP.category||x.productType===modalP.category);const first=list[0];document.getElementById("recipeEditor").insertAdjacentHTML("beforeend",`<div class="resource-row recipe-row"><label class="field">Insumo<select class="r-ref">${list.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select></label><label class="field">Cantidad<input class="r-qty" type="number" step=".0001" value="1"></label><label class="field">Unidad<select class="r-unit">${unitOptions(first?.unit||"unidad")}</select></label><button class="remove-row" data-action="remove-row">×</button></div>`);bindModal();liveProductCalc()}
  if(a==="add-tool-row"){document.getElementById("toolEditor").insertAdjacentHTML("beforeend",`<div class="resource-row tool-row"><label class="field">Equipo / herramienta<select class="t-ref">${db.equipment.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select></label><label class="field">Forma de cálculo<select class="t-method"><option value="perUnit">Por unidad</option><option value="percent">Por porcentaje</option><option value="time">Por tiempo de uso</option><option value="fixed">Costo fijo por producto</option></select></label><label class="field">Valor<input class="t-value" type="number" step=".01" value="1"></label><label class="field">Unidad<select class="t-unit">${unitOptions("pieza")}</select></label><button class="remove-row" data-action="remove-row">×</button></div>`);bindModal();liveProductCalc()}
  if(a==="add-service-row"){document.getElementById("serviceEditor").insertAdjacentHTML("beforeend",`<div class="resource-row service-row"><label class="field">Servicio<select class="s-ref">${db.services.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select></label><label class="field">Forma de cálculo<select class="s-method"><option value="percent">Por porcentaje</option><option value="perUnit">Costo por unidad</option></select></label><label class="field">Valor<input class="s-value" type="number" step=".01" value="100"></label><button class="remove-row" data-action="remove-row">×</button></div>`);bindModal();liveProductCalc()}
  if(a==="add-pack-row"){document.getElementById("packEditor").insertAdjacentHTML("beforeend",`<div class="resource-row pack-row"><label class="field">Empaque<select class="pk-ref">${db.packaging.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select></label><label class="field">Cantidad<input class="pk-qty" type="number" step=".01" value="1"></label><label class="field">Unidad<select class="pk-unit">${unitOptions("pieza","count")}</select></label><button class="remove-row" data-action="remove-row">×</button></div>`);bindModal();liveProductCalc()}
@@ -570,12 +596,13 @@ function action(a,b){
  if(a==="add-marketing-row"){document.getElementById("marketingEditor").insertAdjacentHTML("beforeend",`<div class="resource-row marketing-row"><label class="field">Marketing / venta<select class="m-ref">${db.marketing.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select></label><label class="field">Forma de cálculo<select class="m-method">${allocationOptions("monthlyUnits")}</select></label><label class="field">Valor<input class="m-value" type="number" step=".01" value="100"></label><label class="field">Unidad<select class="m-unit">${unitOptions("min","time")}</select></label><button class="remove-row" data-action="remove-row">×</button></div>`);bindModal();liveProductCalc()}
  if(a==="remove-row"){b.closest(".resource-row")?.remove();liveProductCalc()}
  if(a==="go-sim"){currentProductId=id||currentProductId;currentView="simulator";render()}
- if(a==="product-tab"){currentProductId=id;currentView="simulator";render()}
+ if(a==="product-tab"){currentProductId=id||currentProductId;productSectionModal(id,b.dataset.tab)}
+ if(a==="view-product"){currentProductId=id;productDetailModal(id)}
  if(a==="reset-sim")render();
- if(a==="save-settings"){db.business.name=document.getElementById("setName").value.trim()||"Tu Negocio";db.business.type=document.getElementById("setType").value.trim()||"Negocio";db.business.currency=document.getElementById("setCurrency").value;save();render();toast("Configuración guardada")}
+ if(a==="save-settings"){db.business.name=document.getElementById("setName").value.trim()||"Mi Negocio";db.business.type=document.getElementById("setType").value.trim()||"Emprendimiento";db.business.currency=document.getElementById("setCurrency").value;db.business.phone=document.getElementById("setPhone").value.trim();db.business.whatsapp=document.getElementById("setWhatsapp").value.trim();db.business.address=document.getElementById("setAddress").value.trim();db.business.city=document.getElementById("setCity").value.trim();db.business.email=document.getElementById("setEmail").value.trim();db.business.tagline=document.getElementById("setTagline").value.trim()||"Calidad en cada detalle";db.business.ticketMessage=document.getElementById("setTicketMessage").value.trim()||"Gracias por tu preferencia.";const logo=document.getElementById("businessLogo");if(logo?.dataset?.imageData!==undefined)db.business.logo=logo.dataset.imageData||"";save();render();toast("Perfil guardado")}
  if(a==="export-json")exportData();
  if(a==="import-json")importData();
- if(a==="clear-data"){if(confirm("Esto borrará los datos locales y volverá al ejemplo inicial. ¿Continuar?")){db=clone(seed);save();render();toast("Datos restablecidos")}}
+ if(a==="clear-data"){if(confirm("Esto borrará los datos locales y volverá al ejemplo inicial. ¿Continuar?")){db=structuredClone(seed);save();render();toast("Datos restablecidos")}}
  if(a==="print-report")window.print();
  if(a==="help")helpModal();
  if(a==="notifications")toast("No tienes notificaciones nuevas.");
@@ -628,7 +655,7 @@ function saveProduct(id){
 }
 function saveResource(type,id){
  const meta=resourceMeta[type];let x=id?db[type].find(y=>y.id===id):{id:uid(type[0])};
- meta.fields.forEach(([key,,t])=>x[key]=t==="number"?num(document.getElementById("r_"+key).value):document.getElementById("r_"+key).value.trim());
+ meta.fields.forEach(([key,,t])=>{const el=document.getElementById("r_"+key);x[key]=t==="number"?num(el.value):el.value.trim()});
  if(!id)db[type].push(x);save();closeModal();render();toast("Registro guardado");
 }
 function setupSimulator(){
