@@ -555,7 +555,7 @@ function ticketSvg(p,price,data={}){
  const escSvg=v=>ticketText(String(v??""));
  const wrap=(v,n,l)=>wrapSvgText(v,n,l);
  const safeName=wrap(p.name||"Producto",28,2).map(escSvg);
- const safeDesc=wrap(desc,82,5);
+ const safeDesc=wrap(desc,105,5);
  const safeMsg=wrap(message,78,3);
  const phone=(b.phone||"").trim();
  const wa=(b.whatsapp||"").trim();
@@ -570,7 +570,7 @@ function ticketSvg(p,price,data={}){
  const productImg=p.image?`<image href="${escSvg(p.image)}" x="88" y="245" width="320" height="355" preserveAspectRatio="xMidYMid slice" clip-path="url(#photoClip)"/>`:`<text x="248" y="430" text-anchor="middle" class="placeholder">Tu producto</text>`;
  const logo=b.logo?`<image href="${escSvg(b.logo)}" x="112" y="1260" width="58" height="58" preserveAspectRatio="xMidYMid meet"/>`:"";
  const nameSvg=safeName.map((x,i)=>`<text x="445" y="${302+i*48}" class="productName">${x}</text>`).join("");
- const descSvg=safeDesc.map((x,i)=>`<text x="188" y="${715+i*25}" class="bodyText">${escSvg(x)}</text>`).join("");
+ const descSvg=safeDesc.map((x,i)=>`<text x="188" y="${705+i*16}" class="bodyText descriptionText">${escSvg(x)}</text>`).join("");
  const msgSvg=safeMsg.map((x,i)=>`<text x="205" y="${1118+i*25}" class="bodyText">${escSvg(x)}</text>`).join("");
  const detailItems=[
    ["Presentación",data.presentation||p.unit||"unidad"],
@@ -614,7 +614,7 @@ function ticketSvg(p,price,data={}){
  .productName{font:800 39px Arial,sans-serif;fill:#143b33}.pillText{font:700 18px Arial,sans-serif;fill:#fff}
  .presentationTop{font:600 17px Arial,sans-serif;fill:#173e35}.detailLabel{font:400 14px Arial,sans-serif;fill:#64766f}
  .detailValue{font:700 17px Arial,sans-serif;fill:#173e35}.detailIcon{font:700 16px Arial,sans-serif;fill:#0f5d4d}
- .bodyText{font:400 18px Arial,sans-serif;fill:#465c55}.quantity{font:800 25px Arial,sans-serif;fill:#173e35}
+ .bodyText{font:400 18px Arial,sans-serif;fill:#465c55}.descriptionText{font-size:14px;letter-spacing:.15px}.quantity{font:800 25px Arial,sans-serif;fill:#173e35}
  .unitPrice{font:800 22px Arial,sans-serif;fill:#173e35}.totalLabel{font:800 13px Arial,sans-serif;fill:#bde7d8;letter-spacing:2px}
  .total{font:800 31px Arial,sans-serif;fill:#fff}.contactLeft{font:400 12px Arial,sans-serif;fill:#667872}
  .contactRight{font:600 13px Arial,sans-serif;fill:#173e35}.placeholder{font:400 20px Arial,sans-serif;fill:#8b9a95}
