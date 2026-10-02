@@ -206,7 +206,7 @@ function dashboard(){
  const p=db.products.find(x=>x.id===currentProductId)||db.products[0]; if(!p)return head("Inicio")+`<div class="card empty">Agrega tu primer producto.</div>`;
  const c=productCosts(p), sp=suggestedPrice(p), be=breakEven(p,sp);
  return head("Inicio","Vista general de tus costos, precios y rentabilidad.",`<button class="btn primary" data-action="new-product">＋ Nuevo producto</button>`)+
- `<div class="card section-card hero-product"><div class="product-art ${p.image?"has-image":""}">${p.image?`<img src="${p.image}" alt="${esc(p.name)}">`:""}</div><div style="flex:1"><h2>${esc(p.name)} <button class="btn small" data-action="edit-product" data-id="${p.id}">✎</button></h2><p>${esc(p.description||"")}</p><span class="tag">${esc(p.category||"Producto")}</span> <span class="tag gray">${esc(p.unit||"unidad")}</span><span class="tag gray">${num(p.timeValue??p.timeMin)} ${esc(p.timeUnit||"min")}</span></div></div>
+ `<div class="card section-card hero-product"><div class="product-art ${p.image?"has-image":""}">${p.image?`<img src="${p.image}" alt="${esc(p.name)}">`:`<div class="product-art-placeholder">COSTA</div>`}</div><div style="flex:1"><h2>${esc(p.name)} <button class="btn small" data-action="edit-product" data-id="${p.id}">✎</button></h2><p>${esc(p.description||"")}</p><span class="tag">${esc(p.category||"Producto")}</span> <span class="tag gray">${esc(p.unit||"unidad")}</span><span class="tag gray">${num(p.timeValue??p.timeMin)} ${esc(p.timeUnit||"min")}</span></div></div>
  <div class="tabs"><button class="tab active">▣ Resumen</button><button class="tab" data-action="product-tab" data-id="${p.id}" data-tab="ingredients">◇ Ingredientes</button><button class="tab" data-action="product-tab" data-id="${p.id}" data-tab="indirect">⚙ Costos indirectos</button><button class="tab" data-action="product-tab" data-id="${p.id}" data-tab="price">▥ Precio y ganancia</button><button class="tab" data-action="go-sim" data-id="${p.id}">▦ Simulador</button></div>
  <div class="cards"><div class="card metric"><div class="label">Costo total por unidad</div><div class="value">${money(c.total)}</div><div class="progress"><i style="width:${Math.min(100,c.direct/c.total*100)}%"></i></div><div class="hint">Variables ${money(c.variable)} · ${p.overheadMode==="full"?"Fijos asignados "+money(c.fixedAllocated/c.yieldQty):"Fijos no asignados"}</div></div>
  <div class="card metric good"><div class="label">Precio sugerido</div><div class="value">${money(sp)}</div><div class="hint">Ganancia estimada <b>${money(sp-c.total)}</b> por unidad · margen ${num(p.targetMargin).toFixed(1)}%</div><button class="btn primary" style="margin-top:10px" data-action="client-ticket" data-id="${p.id}">🎫 Generar ticket para cliente</button></div>
@@ -249,9 +249,7 @@ function indirectTable(c){
 
 function products(){
  return head("Productos","Crea cualquier producto: comida, artesanía, servicio, reparación, etc.",`<button class="btn primary" data-action="new-product">＋ Nuevo producto</button>`) +
- `<div class="list-cards">${db.products.map(p=>{const c=productCosts(p),sp=suggestedPrice(p);return `<div class="card product-card" data-action="view-product" data-id="${p.id}" tabindex="0" role="button" title="Tocar para ver el producto">
-   <div class="product-card-media">${p.image?`<img src="${p.image}" alt="${esc(p.name)}">`:`<div class="product-card-placeholder">COSTA</div>`}</div>
-   <div class="pc-top"><div><h3>${esc(p.name)}</h3><p>${esc(p.description||"")}</p></div><span class="tag">${esc(p.category||"General")}</span></div><div class="kpi-row"><div class="mini-kpi"><b>${money(c.total)}</b><span>Costo real</span></div><div class="mini-kpi"><b>${money(sp)}</b><span>Sugerido</span></div></div><div class="price-row" style="margin-top:12px"><div><span class="muted" style="font-size:9px">Margen objetivo</span><div class="big">${num(p.targetMargin).toFixed(1)}%</div></div><div class="actions"><button class="btn small" data-action="client-ticket" data-id="${p.id}">🎫 Ticket</button><button class="btn small" data-action="edit-product" data-id="${p.id}">Editar</button><button class="btn small danger" data-action="delete-product" data-id="${p.id}">Eliminar</button></div></div></div>`}).join("")}</div>`;
+ `<div class="list-cards">${db.products.map(p=>{const c=productCosts(p),sp=suggestedPrice(p);return `<div class="card product-card" data-action="view-product" data-id="${p.id}" tabindex="0" role="button" title="Tocar para ver el producto"><div class="product-card-image">${p.image?`<img src="${p.image}" alt="${esc(p.name)}" loading="lazy">`:`<div class="product-card-placeholder">COSTA</div>`}</div><div class="pc-top"><div><h3>${esc(p.name)}</h3><p>${esc(p.description||"")}</p></div><span class="tag">${esc(p.category||"General")}</span></div><div class="kpi-row"><div class="mini-kpi"><b>${money(c.total)}</b><span>Costo real</span></div><div class="mini-kpi"><b>${money(sp)}</b><span>Sugerido</span></div></div><div class="price-row" style="margin-top:12px"><div><span class="muted" style="font-size:9px">Margen objetivo</span><div class="big">${num(p.targetMargin).toFixed(1)}%</div></div><div class="actions"><button class="btn small" data-action="client-ticket" data-id="${p.id}">🎫 Ticket</button><button class="btn small" data-action="edit-product" data-id="${p.id}">Editar</button><button class="btn small danger" data-action="delete-product" data-id="${p.id}">Eliminar</button></div></div></div>`}).join("")}</div>`;
 }
 
 const resourceMeta={
@@ -329,7 +327,7 @@ function bindModal(){
  document.querySelectorAll("#modalRoot input,#modalRoot select,#modalRoot textarea").forEach(x=>{if(!x._costaInputBound){x.addEventListener("input",()=>{toggleCustomProductFields();liveProductCalc()});x.addEventListener("change",()=>{toggleCustomProductFields();syncRecipeUnit(x);liveProductCalc()});x._costaInputBound=true}});
  const businessLogo=document.getElementById("businessLogo");
  if(businessLogo&&!businessLogo._costaImageBound){businessLogo.addEventListener("change",async()=>{const file=businessLogo.files?.[0];if(!file)return;try{const data=await optimizeProductImage(file,700);businessLogo.dataset.imageData=data;const box=document.getElementById("businessLogoPreview");if(box)box.innerHTML=`<img src="${data}" alt="Logo"><button class="btn small danger" data-action="remove-business-logo">Eliminar</button>`;bindModal();toast("Logo preparado")}catch(e){alert("No se pudo cargar el logo.")}});businessLogo._costaImageBound=true;}
- document.querySelectorAll("#modalRoot #ticketPrice,#modalRoot #ticketQty,#modalRoot #ticketPresentation,#modalRoot #ticketOccasion,#modalRoot #ticketFeatures,#modalRoot #ticketAdditional").forEach(x=>{if(!x._ticketBound){x.addEventListener("input",()=>{const id=document.querySelector('#modalRoot [data-action="ticket-refresh"]')?.dataset.id;if(id)updateTicketPreview(id)});x._ticketBound=true}});
+ document.querySelectorAll("#modalRoot #ticketPrice,#modalRoot #ticketQty,#modalRoot #ticketQPresentation,#modalRoot #ticketQOccasion,#modalRoot #ticketQFeatures,#modalRoot #ticketQIncluded,#modalRoot #ticketQAdditional").forEach(x=>{if(!x._ticketBound){x.addEventListener("input",()=>{const id=document.querySelector('#modalRoot [data-action="ticket-refresh"]')?.dataset.id;if(id)updateTicketPreview(id)});x._ticketBound=true}});
  const imageInput=document.getElementById("pImage");
  if(imageInput&&!imageInput._costaImageBound){
   imageInput.addEventListener("change",async()=>{
@@ -503,60 +501,95 @@ function wrapSvgText(text,maxChars=52,maxLines=5){
  words.forEach(w=>{const next=(line+" "+w).trim();if(next.length>maxChars){if(line)lines.push(line);line=w}else line=next});if(line)lines.push(line);return lines.slice(0,maxLines);
 }
 function buildClientDescription(p,data={}){
- const parts=[];const product=p.name?.trim()||"Producto";
- const presentation=data.presentation?.trim()||p.unit?.trim();
+ const product=(p.name||"Producto").trim();
+ const presentation=(data.presentation||p.unit||"unidad").trim();
  const features=(data.features||"").split(/[,;\n]+/).map(x=>x.trim()).filter(Boolean);
- const occasion=data.occasion?.trim();const extra=data.additional?.trim();
- let first=`${product}`;if(presentation)first+=` en presentación de ${presentation}`;first+=`.`;parts.push(first);
- if(features.length)parts.push(`Características: ${features.join(", ")}.`);
- if(occasion)parts.push(`Ideal para ${occasion}.`);
- if(extra)parts.push(extra.endsWith(".")?extra:extra+".");
- return parts.join(" ");
+ const occasion=(data.occasion||"").trim();
+ const included=(data.included||"").trim();
+ const extra=(data.additional||"").trim();
+ const paragraphs=[];
+ let intro=`${product}`;
+ if(p.category) intro+=` de ${p.category.toLowerCase()}`;
+ if(presentation) intro+=`, presentado en ${presentation}`;
+ intro+=`.`;
+ paragraphs.push(intro);
+ if(features.length) paragraphs.push(`Se distingue por ${features.join(", ")}.`);
+ if(included) paragraphs.push(`Incluye ${included}.`);
+ if(occasion) paragraphs.push(`Ideal para ${occasion}.`);
+ if(extra) paragraphs.push(extra.endsWith(".")?extra:extra+".");
+ return paragraphs.join(" ");
+}
+function ticketQuestionnaire(p){
+ const category=(p.category||"General").toLowerCase();
+ const defaults={
+  presentation:p.unit||"pieza",
+  occasion:"",
+  features:"",
+  included:"",
+  additional:""
+ };
+ const hints=category.includes("comida")||category.includes("reposter")||category.includes("alimento")
+  ? {presentation:"Ej. 1 pieza, 500 g, porción individual",occasion:"Ej. cumpleaños, reunión, regalo",features:"Ej. artesanal, fresco, personalizado",included:"Ej. decoración, empaque, accesorios",additional:"Ej. se prepara sobre pedido"}
+  : {presentation:"Ej. 1 pieza, tamaño mediano, paquete de 6",occasion:"Ej. regalo, uso personal, evento",features:"Ej. artesanal, personalizado, acabado especial",included:"Ej. accesorios, empaque, complementos",additional:"Ej. hecho sobre pedido, entrega disponible"};
+ return {defaults,hints};
+}
+function ticketGeneratedData(p){
+ const q=id=>document.getElementById(id)?.value?.trim()||"";
+ const qty=Math.max(1,num(q("ticketQty"))||1);
+ const presentation=q("ticketQPresentation")||p.unit||"pieza";
+ const occasion=q("ticketQOccasion");
+ const features=q("ticketQFeatures");
+ const included=q("ticketQIncluded");
+ const additional=q("ticketQAdditional");
+ const description=buildClientDescription(p,{presentation,occasion,features,included,additional});
+ return {quantity:qty,presentation,occasion,features,included,additional,description,message:db.business?.ticketMessage||""};
+}
+function renderTicketGeneratedSummary(p,data){
+ return `<div class="ticket-generated-card"><div class="ticket-generated-head"><b>Vista de la información que COSTA generará</b><span>Se crea automáticamente con tus respuestas</span></div><div class="ticket-generated-grid"><div><small>Presentación</small><b>${esc(data.presentation||"—")}</b></div><div><small>Uso / ocasión</small><b>${esc(data.occasion||"—")}</b></div><div><small>Características</small><b>${esc(data.features||"—")}</b></div><div><small>Incluye</small><b>${esc(data.included||"—")}</b></div></div><div class="ticket-generated-description"><small>Descripción para el cliente</small><p>${esc(data.description)}</p></div></div>`;
 }
 function ticketSvg(p,price,data={}){
  const b=db.business||{};
  const biz=b.name?.trim()||"Mi Negocio";
- const desc=buildClientDescription(p,data);
+ const desc=data.description||buildClientDescription(p,data);
  const message=data.message?.trim()||b.ticketMessage?.trim()||"Gracias por considerar nuestro producto.";
  const qty=Math.max(1,num(data.quantity)||1), total=price*qty;
  const contact=[b.phone&&`Tel. ${b.phone}`,b.whatsapp&&`WhatsApp ${b.whatsapp}`,b.email&&b.email,b.address&&b.address,b.city&&b.city].filter(Boolean);
+ const contactLines=wrapSvgText(contact.join(" · "),68,2);
+ const safeBiz=ticketText(wrapSvgText(biz,24,1)[0]||"Mi Negocio");
+ const safeName=wrapSvgText(p.name||"Producto",28,2).map(ticketText);
+ const safeDesc=wrapSvgText(desc,57,6);
+ const safeMsg=wrapSvgText(message,60,3);
  const detail=[
-   ["Presentación",data.presentation?.trim()||p.unit||"unidad"],
-   ["Categoría",p.category||"Producto"],
-   ["Elaboración",num(p.timeValue)>0?`${p.timeValue} ${p.timeUnit||"min"}`:"A definir"],
-   ["Cantidad",String(qty)]
+  ["Presentación",data.presentation?.trim()||p.unit||"unidad"],
+  ["Categoría",p.category||"Producto"],
+  ["Uso / ocasión",data.occasion?.trim()||"General"]
  ];
- const safeBiz=wrapSvgText(biz,26,1).map(ticketText)[0]||"Mi Negocio";
- const safeTagline=wrapSvgText(b.tagline||"Tus ideas, bien calculadas",46,1).map(ticketText)[0]||"Tus ideas, bien calculadas";
- const safeName=wrapSvgText(p.name||"Producto",34,2).map(ticketText);
- const safeDesc=wrapSvgText(desc,68,5).map(ticketText);
- const safeMsg=wrapSvgText(message,68,3).map(ticketText);
- const contactLines=wrapSvgText(contact.join(" · "),82,2).map(ticketText);
- const logo=b.logo?`<image href="${b.logo}" x="86" y="62" width="86" height="72" preserveAspectRatio="xMidYMid meet"/>`:`<circle cx="129" cy="98" r="34" fill="#0f5d4d"/><text x="129" y="110" text-anchor="middle" class="logoMark">C</text>`;
- const productImage=p.image?`<image href="${p.image}" x="84" y="342" width="350" height="280" preserveAspectRatio="xMidYMid slice" clip-path="url(#productClip)"/>`:`<rect x="84" y="342" width="350" height="280" rx="26" fill="#eaf1ed"/><text x="259" y="475" text-anchor="middle" class="placeholder">COSTA</text><text x="259" y="505" text-anchor="middle" class="placeholderSmall">Imagen del producto</text>`;
- const nameSvg=safeName.map((x,i)=>`<text x="470" y="${392+i*50}" class="productName">${x}</text>`).join("");
- const detailSvg=detail.map((d,i)=>{const col=i%2,row=Math.floor(i/2),x=470+col*250,y=470+row*78;return `<g transform="translate(${x} ${y})"><text x="0" y="0" class="detailLabel">${ticketText(d[0])}</text><text x="0" y="31" class="detailValue">${ticketText(d[1])}</text></g>`}).join("");
- const descSvg=safeDesc.map((x,i)=>`<text x="116" y="776" class="bodyText">${x}</text>`).join("");
- const descMore=safeDesc.slice(1).map((x,i)=>`<text x="116" y="807" class="bodyText">${x}</text>`).join("");
- const msgSvg=safeMsg.map((x,i)=>`<text x="116" y="1218" class="bodyText">${x}</text>`).join("");
- const msgMore=safeMsg.slice(1).map((x,i)=>`<text x="116" y="${1248+i*30}" class="bodyText">${x}</text>`).join("");
- return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1500" viewBox="0 0 1080 1500"><defs><linearGradient id="paper" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fffdf8"/><stop offset="1" stop-color="#f3f8f4"/></linearGradient><filter id="shadow"><feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#183c34" flood-opacity=".18"/></filter><clipPath id="productClip"><rect x="84" y="342" width="350" height="280" rx="26"/></clipPath></defs>
+ const logo=b.logo?`<image href="${ticketText(b.logo)}" x="82" y="62" width="108" height="108" preserveAspectRatio="xMidYMid meet"/>`:`<circle cx="136" cy="116" r="48" fill="#0f5d4d"/><text x="136" y="130" text-anchor="middle" class="logoMark">C</text>`;
+ const productImage=p.image?`<image href="${ticketText(p.image)}" x="82" y="330" width="300" height="250" preserveAspectRatio="xMidYMid slice"/>`:`<rect x="82" y="330" width="300" height="250" rx="28" fill="#edf2ee"/><text x="232" y="465" text-anchor="middle" class="placeholder">Tu producto</text>`;
+ const descSvg=safeDesc.map((x,i)=>`<text x="116" y="${805+i*27}" class="bodyText">${ticketText(x)}</text>`).join("");
+ const msgSvg=safeMsg.map((x,i)=>`<text x="116" y="${1215+i*28}" class="bodyText">${ticketText(x)}</text>`).join("");
+ const detailsSvg=detail.map((d,i)=>{const x=112+i*292;return `<g transform="translate(${x} 620)"><circle cx="12" cy="0" r="12" fill="#dceee6"/><text x="35" y="-5" class="detailLabel">${ticketText(d[0])}</text><text x="35" y="22" class="detailValue">${ticketText(d[1])}</text></g>`}).join("");
+ const nameSvg=safeName.map((x,i)=>`<text x="420" y="${380+i*50}" class="productName">${x}</text>`).join("");
+ const contactSvg=contactLines.map((x,i)=>`<text x="540" y="${1390+i*22}" text-anchor="middle" class="contact">${ticketText(x)}</text>`).join("");
+ return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1500" viewBox="0 0 1080 1500"><defs><linearGradient id="paper" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fffdf8"/><stop offset="1" stop-color="#f4f8f4"/></linearGradient><filter id="shadow"><feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#183c34" flood-opacity=".18"/></filter><clipPath id="productClip"><rect x="82" y="330" width="300" height="250" rx="28"/></clipPath></defs>
  <rect width="1080" height="1500" fill="#eaf0ee"/><rect x="44" y="38" width="992" height="1420" rx="42" fill="url(#paper)" filter="url(#shadow)"/>
- ${logo}<text x="205" y="91" class="brandName">${safeBiz}</text><text x="205" y="124" class="tagline">${safeTagline}</text><text x="930" y="87" text-anchor="end" class="smallCap">COSTA</text><text x="930" y="116" text-anchor="end" class="smallText">Cotización de producto</text><line x1="82" y1="160" x2="998" y2="160" stroke="#d6e2dd" stroke-width="2"/>
- <rect x="82" y="194" width="916" height="88" rx="24" fill="#0f5d4d"/><text x="116" y="231" class="ticketTitle">COTIZACIÓN DE PRODUCTO</text><text x="116" y="258" class="ticketSub">Gracias por confiar en nuestro trabajo</text>
- ${productImage}<text x="470" y="320" class="category">${ticketText(p.category||"Producto")}</text>${nameSvg}<rect x="470" y="446" width="476" height="176" rx="24" fill="#f1f5ef"/>${detailSvg}
- <rect x="82" y="650" width="916" height="280" rx="28" fill="#fff" stroke="#dce7e1"/><text x="116" y="700" class="sectionTitle">Descripción</text>${descSvg}${descMore}
- <rect x="82" y="954" width="916" height="142" rx="28" fill="#dff3ea"/><text x="116" y="1000" class="sectionTitle">Cotización</text><text x="116" y="1042" class="bodyText">Cantidad: ${qty}</text><text x="380" y="1042" class="bodyText">Precio unitario: ${ticketText(money(price))}</text><rect x="694" y="976" width="276" height="98" rx="22" fill="#0f5d4d"/><text x="832" y="1013" text-anchor="middle" class="totalLabel">TOTAL</text><text x="832" y="1054" text-anchor="middle" class="total">${ticketText(money(total))}</text>
- <rect x="82" y="1120" width="916" height="176" rx="28" fill="#f7f1e7"/><text x="116" y="1168" class="sectionTitle">Mensaje para el cliente</text>${msgSvg}${msgMore}
- <line x1="82" y1="1330" x2="998" y2="1330" stroke="#d6e2dd" stroke-width="2"/><text x="540" y="1370" text-anchor="middle" class="thanks">${ticketText(b.tagline||"Gracias por tu preferencia")}</text>${contactLines.map((x,i)=>`<text x="540" y="${1398+i*20}" text-anchor="middle" class="contact">${x}</text>`).join("")}<text x="540" y="1434" text-anchor="middle" class="footer">COSTA · Tus ideas, bien calculadas</text>
- <style>.brandName{font:800 42px Arial,sans-serif;fill:#123d34}.tagline{font:400 21px Arial,sans-serif;fill:#61756f}.logoMark{font:800 38px Arial,sans-serif;fill:#fff}.smallCap{font:800 18px Arial,sans-serif;letter-spacing:5px;fill:#0f5d4d}.smallText{font:400 17px Arial,sans-serif;fill:#70817c}.ticketTitle{font:800 27px Arial,sans-serif;fill:#fff;letter-spacing:2px}.ticketSub{font:400 18px Arial,sans-serif;fill:#d8eee7}.productName{font:800 43px Arial,sans-serif;fill:#143b33}.category{font:700 19px Arial,sans-serif;fill:#0f8a6c}.sectionTitle{font:800 25px Arial,sans-serif;fill:#173e35}.bodyText{font:400 20px Arial,sans-serif;fill:#465c55}.totalLabel{font:800 15px Arial,sans-serif;fill:#bde7d8;letter-spacing:2px}.total{font:800 32px Arial,sans-serif;fill:#fff}.thanks{font:700 25px Arial,sans-serif;fill:#173e35}.contact{font:400 17px Arial,sans-serif;fill:#667872}.footer{font:800 14px Arial,sans-serif;fill:#0f5d4d;letter-spacing:4px}.detailLabel{font:400 15px Arial,sans-serif;fill:#7a8a85}.detailValue{font:700 20px Arial,sans-serif;fill:#173e35}.placeholder{font:800 28px Arial,sans-serif;fill:#789087}.placeholderSmall{font:400 15px Arial,sans-serif;fill:#9aa9a4}</style></svg>`;
+ ${logo}<text x="220" y="100" class="brandName">${safeBiz}</text><text x="220" y="137" class="tagline">${ticketText(b.tagline||"Tus ideas, bien calculadas")}</text><text x="998" y="92" text-anchor="end" class="smallCap">COTIZACIÓN</text><text x="998" y="124" text-anchor="end" class="smallText">Información para tu cliente</text><line x1="82" y1="180" x2="998" y2="180" stroke="#d6e2dd" stroke-width="2"/>
+ <rect x="82" y="210" width="916" height="70" rx="20" fill="#e4f5ee"/><text x="116" y="254" class="banner">Gracias por confiar en nuestro trabajo</text>
+ <g clip-path="url(#productClip)">${productImage}</g>
+ ${nameSvg}<text x="420" y="480" class="category">${ticketText(p.category||"Producto")}</text>
+ <rect x="82" y="600" width="916" height="90" rx="24" fill="#f1f5ef"/>${detailsSvg}
+ <rect x="82" y="716" width="916" height="240" rx="28" fill="#fff" stroke="#dce7e1"/><text x="116" y="760" class="sectionTitle">Descripción</text>${descSvg}
+ <rect x="82" y="980" width="916" height="138" rx="28" fill="#dff3ea"/><text x="116" y="1022" class="sectionTitle">Cotización</text><text x="116" y="1072" class="bodyText">Cantidad: ${qty}</text><text x="420" y="1072" class="bodyText">Precio unitario: ${ticketText(money(price))}</text><rect x="690" y="1000" width="280" height="96" rx="22" fill="#0f5d4d"/><text x="830" y="1036" text-anchor="middle" class="totalLabel">TOTAL</text><text x="830" y="1076" text-anchor="middle" class="total">${ticketText(money(total))}</text>
+ <rect x="82" y="1142" width="916" height="132" rx="28" fill="#f7f1e7"/><text x="116" y="1180" class="sectionTitle">Mensaje para el cliente</text>${msgSvg}
+ <line x1="82" y1="1308" x2="998" y2="1308" stroke="#d6e2dd" stroke-width="2"/><text x="540" y="1350" text-anchor="middle" class="thanks">¡Gracias por tu preferencia!</text>${contactSvg}<text x="540" y="1436" text-anchor="middle" class="footer">COSTA · Tus ideas, bien calculadas</text>
+ <style>.brandName{font:800 42px Arial,sans-serif;fill:#123d34}.tagline{font:400 20px Arial,sans-serif;fill:#61756f}.logoMark{font:800 50px Arial,sans-serif;fill:#fff}.smallCap{font:800 18px Arial,sans-serif;letter-spacing:3px;fill:#0f5d4d}.smallText{font:400 17px Arial,sans-serif;fill:#70817c}.banner{font:700 21px Arial,sans-serif;fill:#08795e}.productName{font:800 45px Arial,sans-serif;fill:#143b33}.category{font:700 20px Arial,sans-serif;fill:#0f8a6c}.sectionTitle{font:800 25px Arial,sans-serif;fill:#173e35}.bodyText{font:400 20px Arial,sans-serif;fill:#465c55}.totalLabel{font:800 15px Arial,sans-serif;fill:#bde7d8;letter-spacing:2px}.total{font:800 34px Arial,sans-serif;fill:#fff}.thanks{font:700 27px Arial,sans-serif;fill:#173e35}.contact{font:400 17px Arial,sans-serif;fill:#667872}.footer{font:800 14px Arial,sans-serif;fill:#0f5d4d;letter-spacing:4px}.detailLabel{font:400 15px Arial,sans-serif;fill:#7a8a85}.detailValue{font:700 20px Arial,sans-serif;fill:#173e35}.placeholder{font:400 22px Arial,sans-serif;fill:#8b9a95}</style></svg>`;
 }
 async function clientTicketModal(id){
- const p=db.products.find(x=>x.id===id); if(!p)return;const price=suggestedPrice(p);
- modal(`<div class="modal-backdrop"><div class="modal ticket-modal"><div class="modal-head"><h2>🎫 Ticket para cliente</h2><button class="close" data-action="close-modal">×</button></div><div class="modal-body"><div class="alert success"><b>Solo información para tu cliente.</b> COSTA no muestra costos, margen, ganancia ni gastos internos.</div><div class="form-grid"><label class="field">Precio unitario<input id="ticketPrice" type="number" step=".01" min="0" value="${price.toFixed(2)}"></label><label class="field">Cantidad<input id="ticketQty" type="number" step="1" min="1" value="1"></label><label class="field">Presentación<input id="ticketPresentation" value="${esc(p.unit||"pieza")}" placeholder="Ej. 1 pieza, 500 g..."></label><label class="field">Ocasión / uso<input id="ticketOccasion" placeholder="Ej. cumpleaños, regalo..."></label><label class="field full">Características principales<input id="ticketFeatures" placeholder="Ej. artesanal, personalizado, acabado mate..."></label><label class="field full">Detalle adicional<textarea id="ticketAdditional" rows="3" placeholder="Información importante para el cliente"></textarea></label></div><div class="ticket-generated-note" id="ticketGeneratedNote"></div><div class="ticket-preview"><img id="ticketPreview" alt="Vista previa del ticket"></div><div class="actions ticket-actions"><button class="btn" data-action="ticket-refresh" data-id="${id}">↻ Actualizar</button><button class="btn" data-action="ticket-save" data-id="${id}">⬇ Guardar imagen</button><button class="btn primary" data-action="ticket-share" data-id="${id}">📤 Compartir imagen</button></div></div></div></div>`);updateTicketPreview(id);
+ const p=db.products.find(x=>x.id===id); if(!p)return;const price=suggestedPrice(p), q=ticketQuestionnaire(p);
+ modal(`<div class="modal-backdrop"><div class="modal ticket-modal"><div class="modal-head"><h2>🎫 Crear ticket para cliente</h2><button class="close" data-action="close-modal">×</button></div><div class="modal-body"><div class="alert success"><b>COSTA lo redacta por ti.</b> Responde preguntas sencillas y la app construirá automáticamente la presentación, características y descripción del producto. Los costos internos nunca se muestran.</div><div class="form-grid"><label class="field">Precio unitario<input id="ticketPrice" type="number" step=".01" min="0" value="${price.toFixed(2)}"></label><label class="field">Cantidad<input id="ticketQty" type="number" step="1" min="1" value="1"></label><label class="field full">¿Cómo se presenta o entrega este producto?<input id="ticketQPresentation" value="${esc(q.defaults.presentation)}" placeholder="${esc(q.hints.presentation)}"></label><label class="field full">¿Para qué ocasión o uso lo está comprando el cliente?<input id="ticketQOccasion" placeholder="${esc(q.hints.occasion)}"></label><label class="field full">¿Qué lo hace especial o qué características quieres destacar?<input id="ticketQFeatures" placeholder="${esc(q.hints.features)}"></label><label class="field full">¿Qué incluye el producto?<input id="ticketQIncluded" placeholder="${esc(q.hints.included)}"></label><label class="field full">¿Hay algo adicional que el cliente deba saber?<textarea id="ticketQAdditional" rows="2" placeholder="${esc(q.hints.additional)}"></textarea></label></div><div class="ticket-generated-note" id="ticketGeneratedNote"></div><div class="ticket-preview"><img id="ticketPreview" alt="Vista previa del ticket"></div><div class="actions ticket-actions"><button class="btn" data-action="ticket-refresh" data-id="${id}">↻ Actualizar</button><button class="btn" data-action="ticket-save" data-id="${id}">⬇ Guardar imagen</button><button class="btn primary" data-action="ticket-share" data-id="${id}">📤 Compartir imagen</button></div></div></div></div>`);updateTicketPreview(id);
 }
-function ticketDataFromForm(p){return {quantity:num(document.getElementById("ticketQty")?.value)||1,presentation:document.getElementById("ticketPresentation")?.value||p.unit||"pieza",occasion:document.getElementById("ticketOccasion")?.value||"",features:document.getElementById("ticketFeatures")?.value||"",additional:document.getElementById("ticketAdditional")?.value||"",message:db.business?.ticketMessage||""};}
-function updateTicketPreview(id){const p=db.products.find(x=>x.id===id);if(!p)return;const data=ticketDataFromForm(p),price=Math.max(0,num(document.getElementById("ticketPrice")?.value??suggestedPrice(p)));const img=document.getElementById("ticketPreview");if(img)img.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(ticketSvg(p,price,data));const note=document.getElementById("ticketGeneratedNote");if(note)note.innerHTML=`<b>Descripción generada:</b> ${esc(buildClientDescription(p,data))}`;}
+function ticketDataFromForm(p){return ticketGeneratedData(p);}
+function updateTicketPreview(id){const p=db.products.find(x=>x.id===id);if(!p)return;const data=ticketDataFromForm(p),price=Math.max(0,num(document.getElementById("ticketPrice")?.value??suggestedPrice(p)));const img=document.getElementById("ticketPreview");if(img)img.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(ticketSvg(p,price,data));const note=document.getElementById("ticketGeneratedNote");if(note)note.innerHTML=renderTicketGeneratedSummary(p,data);}
 async function svgToPngBlob(svg,width=900,height=1100){
  const blob=new Blob([svg],{type:"image/svg+xml;charset=utf-8"});
  const url=URL.createObjectURL(blob);
