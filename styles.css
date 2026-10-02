@@ -44,5 +44,3 @@ nav{display:flex;flex-direction:column;gap:3px}.nav-item{border:0;background:tra
 @media(max-width:700px){.ticket-generated-grid{grid-template-columns:1fr}.ticket-generated-head{align-items:flex-start;flex-direction:column}}
 
 .ticket-modal .field small{color:#71827c;font-size:11px;font-weight:600}.ticket-modal textarea{resize:vertical;min-height:74px}.ticket-message-field textarea{min-height:96px;line-height:1.55}.ticket-generated-description p{text-align:justify}.ticket-preview img{object-fit:contain}.ticket-generated-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.ticket-generated-description p{font-size:13px;line-height:1.65}
-
-.profile .avatar.has-logo{overflow:hidden;padding:0;background:#fff;border:1px solid var(--line)}.profile .avatar.has-logo img{width:100%;height:100%;object-fit:cover;display:block}.business-logo-box{align-items:center}.business-logo-box #businessLogoPreview{display:flex;align-items:center;gap:8px}.business-logo-box #businessLogoPreview img{width:92px;height:68px}
