@@ -322,11 +322,29 @@ function renderProductImagePreview(data){
  box.innerHTML=data?`<img src="${data}" alt="Imagen del producto"><button type="button" class="btn small danger" data-action="remove-product-image">Eliminar imagen</button>`:`<div class="image-placeholder">Agrega una foto para que también pueda aparecer en la presentación para tu cliente.</div>`;
  bindModal();
 }
+function bindBusinessLogo(){
+ const businessLogo=document.getElementById("businessLogo");
+ if(!businessLogo||businessLogo._costaImageBound)return;
+ businessLogo.addEventListener("change",async()=>{
+  const file=businessLogo.files?.[0];
+  if(!file)return;
+  try{
+   const data=await optimizeProductImage(file,700);
+   businessLogo.dataset.imageData=data;
+   const box=document.getElementById("businessLogoPreview");
+   if(box){box.innerHTML=`<img src="${data}" alt="Logo"><button class="btn small danger" data-action="remove-business-logo">Eliminar</button>`;}
+   bind();
+   toast("Logo cargado. Pulsa Guardar cambios para conservarlo.");
+  }catch(e){
+   businessLogo.dataset.imageData="";
+   alert("No se pudo cargar el logo. Prueba con JPG, PNG o WebP.");
+  }
+ });
+ businessLogo._costaImageBound=true;
+}
 function bindModal(){
  document.querySelectorAll("#modalRoot [data-action]").forEach(x=>{if(!x._costaBound){x.onclick=()=>action(x.dataset.action,x);x._costaBound=true}});
  document.querySelectorAll("#modalRoot input,#modalRoot select,#modalRoot textarea").forEach(x=>{if(!x._costaInputBound){x.addEventListener("input",()=>{toggleCustomProductFields();liveProductCalc()});x.addEventListener("change",()=>{toggleCustomProductFields();syncRecipeUnit(x);liveProductCalc()});x._costaInputBound=true}});
- const businessLogo=document.getElementById("businessLogo");
- if(businessLogo&&!businessLogo._costaImageBound){businessLogo.addEventListener("change",async()=>{const file=businessLogo.files?.[0];if(!file)return;try{const data=await optimizeProductImage(file,700);businessLogo.dataset.imageData=data;const box=document.getElementById("businessLogoPreview");if(box)box.innerHTML=`<img src="${data}" alt="Logo"><button class="btn small danger" data-action="remove-business-logo">Eliminar</button>`;bindModal();toast("Logo preparado")}catch(e){alert("No se pudo cargar el logo.")}});businessLogo._costaImageBound=true;}
  document.querySelectorAll("#modalRoot #ticketPrice,#modalRoot #ticketQty,#modalRoot #ticketQPresentation,#modalRoot #ticketQOccasion,#modalRoot #ticketQFeatures,#modalRoot #ticketQIncluded,#modalRoot #ticketQBenefit,#modalRoot #ticketQDetails,#modalRoot #ticketQAdditional,#modalRoot #ticketQMessage").forEach(x=>{if(!x._ticketBound){x.addEventListener("input",()=>{const id=document.querySelector('#modalRoot [data-action="ticket-refresh"]')?.dataset.id;if(id)updateTicketPreview(id)});x._ticketBound=true}});
  const imageInput=document.getElementById("pImage");
  if(imageInput&&!imageInput._costaImageBound){
@@ -650,6 +668,7 @@ function closeModal(){document.getElementById("modalRoot").innerHTML=""}
 function toast(msg){const x=document.getElementById("toast");x.textContent=msg;x.classList.add("show");setTimeout(()=>x.classList.remove("show"),2200)}
 function bind(){
  document.querySelectorAll(".nav-item").forEach(b=>b.onclick=()=>{currentView=b.dataset.view;document.getElementById("sidebar").classList.remove("open");render()});
+ bindBusinessLogo();
  const hamburger=document.getElementById("hamburger"); if(hamburger) hamburger.onclick=()=>document.getElementById("sidebar").classList.toggle("open");
  const gs=document.getElementById("globalSearch");if(gs)gs.oninput=()=>{if(!gs.value.trim())return;const q=gs.value.toLowerCase();const found=db.products.find(p=>p.name.toLowerCase().includes(q));if(found){currentProductId=found.id;currentView="dashboard";render()}};
 }
@@ -683,7 +702,7 @@ function action(a,b){
  if(a==="product-tab"){currentProductId=id||currentProductId;productSectionModal(id,b.dataset.tab)}
  if(a==="view-product"){currentProductId=id;productDetailModal(id)}
  if(a==="reset-sim")render();
- if(a==="save-settings"){db.business.name=document.getElementById("setName").value.trim()||"Mi Negocio";db.business.type=document.getElementById("setType").value.trim()||"Emprendimiento";db.business.currency=document.getElementById("setCurrency").value;db.business.phone=document.getElementById("setPhone").value.trim();db.business.whatsapp=document.getElementById("setWhatsapp").value.trim();db.business.address=document.getElementById("setAddress").value.trim();db.business.city=document.getElementById("setCity").value.trim();db.business.email=document.getElementById("setEmail").value.trim();db.business.tagline=document.getElementById("setTagline").value.trim()||"Calidad en cada detalle";db.business.ticketMessage=document.getElementById("setTicketMessage").value.trim()||"Gracias por tu preferencia.";const logo=document.getElementById("businessLogo");if(logo?.dataset?.imageData!==undefined)db.business.logo=logo.dataset.imageData||"";save();render();toast("Perfil guardado")}
+ if(a==="save-settings"){db.business.name=document.getElementById("setName").value.trim()||"Mi Negocio";db.business.type=document.getElementById("setType").value.trim()||"Emprendimiento";db.business.currency=document.getElementById("setCurrency").value;db.business.phone=document.getElementById("setPhone").value.trim();db.business.whatsapp=document.getElementById("setWhatsapp").value.trim();db.business.address=document.getElementById("setAddress").value.trim();db.business.city=document.getElementById("setCity").value.trim();db.business.email=document.getElementById("setEmail").value.trim();db.business.tagline=document.getElementById("setTagline").value.trim()||"Calidad en cada detalle";db.business.ticketMessage=document.getElementById("setTicketMessage").value.trim()||"Gracias por tu preferencia.";const logo=document.getElementById("businessLogo");if(logo?.dataset?.imageData)db.business.logo=logo.dataset.imageData;try{save();render();toast("Perfil guardado")}catch(e){alert("No se pudo guardar el perfil. La imagen puede ser demasiado grande; prueba con una imagen más pequeña.")}}
  if(a==="export-json")exportData();
  if(a==="import-json")importData();
  if(a==="clear-data"){if(confirm("Esto borrará los datos locales y volverá al ejemplo inicial. ¿Continuar?")){db=structuredClone(seed);save();render();toast("Datos restablecidos")}}
