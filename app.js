@@ -180,6 +180,11 @@ function render(){
  document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view===currentView));
  document.getElementById("businessNameTop").textContent=db.business.name;
  document.getElementById("businessTypeTop").textContent=db.business.type;
+ const avatar=document.getElementById("businessAvatar");
+ if(avatar){
+   avatar.innerHTML=db.business.logo?`<img src="${esc(db.business.logo)}" alt="Logo del negocio">`:`<span>${esc((db.business.name||"N").trim().charAt(0).toUpperCase()||"N")}</span>`;
+   avatar.classList.toggle("has-logo",!!db.business.logo);
+ }
  const root=document.getElementById("content");
  const views={dashboard:dashboard,products:products,ingredients:resources.bind(null,"ingredients","Ingredientes / Insumos"),equipment:resources.bind(null,"equipment","Equipos y herramientas"),services:resources.bind(null,"services","Servicios (luz, gas, etc.)"),transport:resources.bind(null,"transport","Transporte"),labor:resources.bind(null,"labor","Mano de obra"),packaging:resources.bind(null,"packaging","Empaques"),fixed:resources.bind(null,"fixed","Gastos fijos"),marketing:resources.bind(null,"marketing","Marketing y ventas"),simulator:simulator,reports:reports,settings:settings};
  root.innerHTML=(views[currentView]||dashboard)();
@@ -331,6 +336,8 @@ function bindBusinessLogo(){
   try{
    const data=await optimizeProductImage(file,700);
    businessLogo.dataset.imageData=data;
+   const avatar=document.getElementById("businessAvatar");
+   if(avatar){avatar.innerHTML=`<img src="${esc(data)}" alt="Logo del negocio">`;avatar.classList.add("has-logo");}
    const box=document.getElementById("businessLogoPreview");
    if(box){box.innerHTML=`<img src="${data}" alt="Logo"><button class="btn small danger" data-action="remove-business-logo">Eliminar</button>`;}
    bind();
@@ -678,7 +685,7 @@ function action(a,b){
  if(a==="choose-product-image"){document.getElementById("pImage")?.click()}
  if(a==="remove-product-image"){const input=document.getElementById("pImage");if(input){input.value="";input.dataset.imageData="";renderProductImagePreview("")}}
  if(a==="choose-business-logo"){document.getElementById("businessLogo")?.click()}
- if(a==="remove-business-logo"){db.business.logo="";save();render();toast("Logo eliminado")}
+ if(a==="remove-business-logo"){db.business.logo="";const input=document.getElementById("businessLogo");if(input)input.value="";if(input)input.dataset.imageData="";save();render();toast("Logo eliminado")}
  if(a==="edit-product"){currentProductId=id;modal(productModal(id));bindModal();liveProductCalc()}
  if(a==="client-ticket"){clientTicketModal(id)}
  if(a==="ticket-refresh"){updateTicketPreview(id)}
